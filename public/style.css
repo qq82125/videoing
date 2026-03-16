@@ -1192,6 +1192,22 @@ body {
   gap: 8px;
 }
 
+.history-overview-stage {
+  display: grid;
+  gap: 8px;
+}
+
+.history-overview-section-label {
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.history-overview-metrics-stage {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .history-overview-pill {
   display: flex;
   align-items: center;
@@ -1484,6 +1500,30 @@ body {
   color: var(--accent);
   font-size: var(--text-md);
   font-weight: 700;
+}
+
+.active-chip-stage {
+  color: rgba(120, 216, 245, 0.96);
+  background: linear-gradient(180deg, rgba(120, 216, 245, 0.16), rgba(120, 216, 245, 0.08));
+  border-color: rgba(120, 216, 245, 0.22);
+}
+
+.active-chip-stage-script {
+  color: rgba(120, 216, 245, 0.96);
+  background: linear-gradient(180deg, rgba(120, 216, 245, 0.16), rgba(120, 216, 245, 0.08));
+  border-color: rgba(120, 216, 245, 0.22);
+}
+
+.active-chip-stage-production {
+  color: rgba(255, 221, 136, 0.96);
+  background: linear-gradient(180deg, rgba(255, 214, 102, 0.18), rgba(255, 214, 102, 0.08));
+  border-color: rgba(255, 214, 102, 0.2);
+}
+
+.active-chip-stage-export {
+  color: rgba(133, 234, 191, 0.98);
+  background: linear-gradient(180deg, rgba(105, 227, 175, 0.18), rgba(105, 227, 175, 0.08));
+  border-color: rgba(105, 227, 175, 0.2);
 }
 
 .draft-form,
@@ -1990,6 +2030,27 @@ body {
 .workflow-phase-card.is-primary strong {
   font-size: 20px;
   letter-spacing: -0.03em;
+}
+
+.workflow-phase-card-script {
+  background:
+    linear-gradient(180deg, rgba(120, 216, 245, 0.14), rgba(120, 216, 245, 0.05)),
+    rgba(255, 255, 255, 0.02);
+  border-color: rgba(120, 216, 245, 0.2);
+}
+
+.workflow-phase-card-production {
+  background:
+    linear-gradient(180deg, rgba(255, 214, 102, 0.14), rgba(255, 214, 102, 0.05)),
+    rgba(255, 255, 255, 0.02);
+  border-color: rgba(255, 214, 102, 0.18);
+}
+
+.workflow-phase-card-export {
+  background:
+    linear-gradient(180deg, rgba(105, 227, 175, 0.14), rgba(105, 227, 175, 0.05)),
+    rgba(255, 255, 255, 0.02);
+  border-color: rgba(105, 227, 175, 0.18);
 }
 
 .workflow-phase-card p,
@@ -3962,6 +4023,14 @@ audio {
   color: var(--muted);
   font-size: 11px;
   letter-spacing: 0.01em;
+}
+
+.history-tags span:first-child {
+  color: rgba(120, 216, 245, 0.92);
+  border-color: rgba(120, 216, 245, 0.14);
+  background:
+    linear-gradient(180deg, rgba(120, 216, 245, 0.1), rgba(120, 216, 245, 0.045)),
+    rgba(120, 216, 245, 0.05);
 }
 
 .history-foot span {

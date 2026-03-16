@@ -20,6 +20,7 @@ const comboGrid = document.querySelector("#combo-grid");
 const workflowMapEl = document.querySelector("#workflow-map");
 const workflowPhaseTitleEl = document.querySelector("#workflow-phase-title");
 const workflowPhaseTextEl = document.querySelector("#workflow-phase-text");
+const workflowPhaseCardEl = document.querySelector(".workflow-phase-card.is-primary");
 const workflowDirtyChipsEl = document.querySelector("#workflow-dirty-chips");
 const workflowRecommendTitleEl = document.querySelector("#workflow-recommend-title");
 const workflowRecommendTextEl = document.querySelector("#workflow-recommend-text");
@@ -112,6 +113,7 @@ const releaseControlMetaEl = document.querySelector("#release-control-meta");
 const currentTopicEl = document.querySelector("#current-topic");
 const currentMetaEl = document.querySelector("#current-meta");
 const currentUpdatedEl = document.querySelector("#current-updated");
+const activeStageChip = document.querySelector("#active-stage-chip");
 const editorStateEl = document.querySelector("#editor-state");
 const editorGroupTitleEl = document.querySelector("#editor-group-title");
 const editorGroupCoverEl = document.querySelector("#editor-group-cover");
@@ -498,7 +500,7 @@ async function handleMarkReady() {
 function renderDraft(draft) {
   currentDraft = draft;
   currentDraftId = draft.id;
-  currentProductionStage = getStoredDraftStage(currentDraftId) || deriveProductionStage(draft);
+  currentProductionStage = draft.productionStage || getStoredDraftStage(currentDraftId) || deriveProductionStage(draft);
   syncProductionStage();
   currentCoverStyle = draft.coverStyle || "report";
   currentTitleVariant = draft.activeTitleVariant || "a";
@@ -548,6 +550,9 @@ function renderDraft(draft) {
   editCtaEl.value = draft.cta || "";
   syncDraftSnapshot();
 
+  const productionStage = draft.productionStage || deriveProductionStage(draft);
+  activeStageChip.textContent = getProductionStageLabel(productionStage);
+  applyProductionStageTone(activeStageChip, productionStage, "active-chip-stage");
   activeTitleChip.textContent = `${draft.durationMode || 90} 秒`;
   activeCoverChip.textContent = draft.coverStyleLabel || "行业报告风";
   workflowStatusSelect.value = draft.workflowStatus || "pending";
@@ -709,6 +714,7 @@ function renderWorkflowControl(recommendation, draft) {
   if (workflowPhaseTextEl) {
     workflowPhaseTextEl.textContent = recommendation.phaseText;
   }
+  applyProductionStageTone(workflowPhaseCardEl, currentProductionStage, "workflow-phase-card");
   if (workflowDirtyChipsEl) {
     workflowDirtyChipsEl.innerHTML = recommendation.dirtyChips.map((chip) => (
       `<span class="workflow-dirty-chip is-${chip.tone}">${chip.label}</span>`
@@ -1523,6 +1529,9 @@ function handleConfirmScriptStage() {
 }
 
 function deriveProductionStage(draft) {
+  if (draft?.productionStage === "script" || draft?.productionStage === "production" || draft?.productionStage === "export") {
+    return draft.productionStage;
+  }
   if (draft?.exportInfo?.videoReady) {
     return "export";
   }
@@ -1538,11 +1547,29 @@ function syncProductionStage() {
 
 function setProductionStage(stage) {
   currentProductionStage = stage;
+  if (currentDraft) {
+    currentDraft.productionStage = stage;
+  }
   syncProductionStage();
   storeDraftStage(currentDraftId, stage);
+  persistProductionStage(currentDraftId, stage);
   if (currentDraft) {
     renderWorkflowMap(currentDraft);
     renderScriptPrep(currentDraft);
+  }
+}
+
+async function persistProductionStage(draftId, stage) {
+  if (!draftId || isPreviewDraft()) {
+    return;
+  }
+  try {
+    await postJson("/api/drafts/meta", {
+      draftId,
+      productionStage: stage,
+    });
+  } catch {
+    // keep local fallback behavior if persistence fails
   }
 }
 
@@ -2460,6 +2487,24 @@ function historySummaryCard(label, value) {
   return `<div class="history-summary-card"><strong>${value}</strong><span>${label}</span></div>`;
 }
 
+function getProductionStageLabel(stage) {
+  if (stage === "export") {
+    return "已成片";
+  }
+  if (stage === "production") {
+    return "试产中";
+  }
+  return "脚本期";
+}
+
+function applyProductionStageTone(element, stage, baseClass) {
+  if (!element) {
+    return;
+  }
+  element.classList.remove(`${baseClass}-script`, `${baseClass}-production`, `${baseClass}-export`);
+  element.classList.add(`${baseClass}-${stage || "script"}`);
+}
+
 async function loadDraftHistory() {
   if (!historyList || !historySummary || !historySearch || !historyStatusFilter || !historySort || !historyStarredFilter) {
     return;
@@ -2497,6 +2542,7 @@ function renderHistory(drafts) {
       const isActive = draft.id === currentDraftId ? " active" : "";
       const readiness = buildHistoryReadiness(draft);
       const activeStateLabel = draft.id === currentDraftId ? "当前展开" : "点击展开";
+      const productionStageLabel = getProductionStageLabel(draft.productionStage || deriveProductionStage(draft));
       return `
         <button type="button" class="history-item${isActive}" data-draft-id="${draft.id}">
           <div class="history-head">
@@ -2506,6 +2552,7 @@ function renderHistory(drafts) {
           <div class="history-compact">
             <span>${draft.topic}</span>
             <div class="history-tags">
+              <span>${productionStageLabel}</span>
               <span>${draft.coverStyleLabel}</span>
               <span>${draft.durationMode} 秒</span>
             </div>
@@ -2513,6 +2560,7 @@ function renderHistory(drafts) {
           <div class="history-detail">
             <span>${draft.topic}</span>
             <div class="history-tags">
+              <span>${productionStageLabel}</span>
               <span>${draft.coverStyleLabel}</span>
               <span>${draft.durationMode} 秒</span>
               <span>${draft.workflowStatusLabel}</span>
@@ -2548,6 +2596,9 @@ function renderHistorySummary(drafts) {
   const blocked = drafts.filter((draft) => draft.exportStatus === "blocked" || draft.blockingIssueCount > 0).length;
   const pending = drafts.filter((draft) => draft.workflowStatus === "pending" || draft.workflowStatus === "revised").length;
   const ready = drafts.filter((draft) => draft.workflowStatus === "ready").length;
+  const scriptStageCount = drafts.filter((draft) => (draft.productionStage || deriveProductionStage(draft)) === "script").length;
+  const productionStageCount = drafts.filter((draft) => (draft.productionStage || deriveProductionStage(draft)) === "production").length;
+  const exportStageCount = drafts.filter((draft) => (draft.productionStage || deriveProductionStage(draft)) === "export").length;
 
   historySummary.innerHTML = [
     `
@@ -2572,6 +2623,23 @@ function renderHistorySummary(drafts) {
           <div class="history-overview-pill">
             <span>已导出</span>
             <strong>${exported} 条</strong>
+          </div>
+        </div>
+        <div class="history-overview-stage">
+          <span class="history-overview-section-label">生产阶段</span>
+          <div class="history-overview-metrics history-overview-metrics-stage">
+            <div class="history-overview-pill">
+              <span>脚本期</span>
+              <strong>${scriptStageCount} 条</strong>
+            </div>
+            <div class="history-overview-pill">
+              <span>试产中</span>
+              <strong>${productionStageCount} 条</strong>
+            </div>
+            <div class="history-overview-pill">
+              <span>已成片</span>
+              <strong>${exportStageCount} 条</strong>
+            </div>
           </div>
         </div>
       </article>

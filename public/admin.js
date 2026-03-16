@@ -408,6 +408,7 @@ function renderHistory(drafts) {
   historyList.innerHTML = drafts.map((draft) => {
     const isActive = draft.id === currentDraftId ? " active" : "";
     const readiness = buildHistoryReadiness(draft);
+    const productionStageLabel = getProductionStageLabel(draft.productionStage || deriveProductionStage(draft));
     return `
       <a class="history-item${isActive}" href="/?draft=${encodeURIComponent(draft.id)}">
         <div class="history-head">
@@ -417,6 +418,7 @@ function renderHistory(drafts) {
         <div class="history-compact">
           <span>${escapeHtml(draft.topic)}</span>
           <div class="history-tags">
+            <span>${escapeHtml(productionStageLabel)}</span>
             <span>${escapeHtml(draft.coverStyleLabel)}</span>
             <span>${escapeHtml(draft.durationMode)} 秒</span>
           </div>
@@ -424,6 +426,7 @@ function renderHistory(drafts) {
         <div class="history-detail">
           <span>${escapeHtml(draft.topic)}</span>
           <div class="history-tags">
+            <span>${escapeHtml(productionStageLabel)}</span>
             <span>${escapeHtml(draft.coverStyleLabel)}</span>
             <span>${escapeHtml(draft.durationMode)} 秒</span>
             <span>${escapeHtml(draft.workflowStatusLabel)}</span>
@@ -607,6 +610,9 @@ function renderHistorySummary(drafts) {
   const blocked = drafts.filter((draft) => draft.exportStatus === "blocked" || draft.blockingIssueCount > 0).length;
   const pending = drafts.filter((draft) => draft.workflowStatus === "pending" || draft.workflowStatus === "revised").length;
   const ready = drafts.filter((draft) => draft.workflowStatus === "ready").length;
+  const scriptStageCount = drafts.filter((draft) => (draft.productionStage || deriveProductionStage(draft)) === "script").length;
+  const productionStageCount = drafts.filter((draft) => (draft.productionStage || deriveProductionStage(draft)) === "production").length;
+  const exportStageCount = drafts.filter((draft) => (draft.productionStage || deriveProductionStage(draft)) === "export").length;
   historySummary.innerHTML = `
     <article class="history-overview-card">
       <div class="history-overview-head">
@@ -619,8 +625,35 @@ function renderHistorySummary(drafts) {
         <div class="history-overview-pill"><span>有阻塞</span><strong>${blocked} 条</strong></div>
         <div class="history-overview-pill"><span>已导出</span><strong>${exported} 条</strong></div>
       </div>
+      <div class="history-overview-stage">
+        <span class="history-overview-section-label">生产阶段</span>
+        <div class="history-overview-metrics history-overview-metrics-stage">
+          <div class="history-overview-pill"><span>脚本期</span><strong>${scriptStageCount} 条</strong></div>
+          <div class="history-overview-pill"><span>试产中</span><strong>${productionStageCount} 条</strong></div>
+          <div class="history-overview-pill"><span>已成片</span><strong>${exportStageCount} 条</strong></div>
+        </div>
+      </div>
     </article>
   `;
+}
+
+function getProductionStageLabel(stage) {
+  if (stage === "export") return "已成片";
+  if (stage === "production") return "试产中";
+  return "脚本期";
+}
+
+function deriveProductionStage(draft) {
+  if (draft?.productionStage === "script" || draft?.productionStage === "production" || draft?.productionStage === "export") {
+    return draft.productionStage;
+  }
+  if (draft?.exportInfo?.videoReady || draft?.workflowStatus === "exported") {
+    return "export";
+  }
+  if ((draft?.qualityChecks || []).length || draft?.workflowStatus === "ready") {
+    return "production";
+  }
+  return "script";
 }
 
 function initHistoryCollapse() {

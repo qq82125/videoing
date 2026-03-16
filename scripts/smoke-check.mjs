@@ -3,11 +3,13 @@ const draftIdArg = process.argv.slice(2).find((arg) => arg.startsWith("--draft="
 const baseUrlArg = process.argv.slice(2).find((arg) => arg.startsWith("--base-url="));
 const comboIdArg = process.argv.slice(2).find((arg) => arg.startsWith("--combo="));
 const sceneIdArg = process.argv.slice(2).find((arg) => arg.startsWith("--scene="));
+const stageArg = process.argv.slice(2).find((arg) => arg.startsWith("--stage="));
 
 const baseUrl = (baseUrlArg ? baseUrlArg.split("=").slice(1).join("=") : "http://127.0.0.1:3016").replace(/\/+$/, "");
 const draftId = draftIdArg ? draftIdArg.split("=").slice(1).join("=") : "";
 const comboId = comboIdArg ? comboIdArg.split("=").slice(1).join("=") : "";
 const sceneId = sceneIdArg ? sceneIdArg.split("=").slice(1).join("=") : "";
+const stage = stageArg ? stageArg.split("=").slice(1).join("=") : "";
 const shouldExport = args.has("--export");
 
 async function main() {
@@ -21,8 +23,22 @@ async function main() {
     const draftData = await fetchJson(`${baseUrl}/api/drafts/${encodeURIComponent(draftId)}`);
     const draft = draftData.draft || {};
     summary.push(
-      `draft: ok (${draft.id}, cover=${draft.assets?.coverType || "unknown"}, voice=${draft.assets?.voiceFormat || "unknown"})`,
+      `draft: ok (${draft.id}, cover=${draft.assets?.coverType || "unknown"}, voice=${draft.assets?.voiceFormat || "unknown"}, stage=${draft.productionStage || "unknown"})`,
     );
+
+    if (stage) {
+      const stageData = await postJson(`${baseUrl}/api/drafts/meta`, { draftId, productionStage: stage });
+      const persistedStage = stageData.draft?.productionStage || "unknown";
+      if (persistedStage !== stage) {
+        throw new Error(`stage failed: expected ${stage}, got ${persistedStage}`);
+      }
+      const reloaded = await fetchJson(`${baseUrl}/api/drafts/${encodeURIComponent(draftId)}`);
+      const reloadedStage = reloaded.draft?.productionStage || "unknown";
+      if (reloadedStage !== stage) {
+        throw new Error(`stage reload failed: expected ${stage}, got ${reloadedStage}`);
+      }
+      summary.push(`stage: ok (${stage})`);
+    }
 
     if (comboId) {
       const comboData = await postJson(`${baseUrl}/api/combo`, { draftId, comboId });

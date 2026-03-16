@@ -250,6 +250,7 @@ export async function createDraft(input) {
     angle,
     audience,
     durationMode,
+    productionStage: "script",
     workflowStatus: "pending",
     workflowStatusLabel: getWorkflowStatusLabel("pending"),
     starred: false,
@@ -351,6 +352,7 @@ export async function exportDraft(draftId) {
       await execFileAsync("sh", [exportScriptPath], { cwd: draftDir });
       exported = true;
       message = "视频已导出。";
+      draft.productionStage = "export";
       draft.workflowStatus = "exported";
       draft.workflowStatusLabel = getWorkflowStatusLabel("exported");
       draft.updatedAt = new Date().toISOString();
@@ -664,6 +666,9 @@ export async function updateDraftContent(input) {
   draft.updatedAt = new Date().toISOString();
   draft.workflowStatus = "revised";
   draft.workflowStatusLabel = getWorkflowStatusLabel("revised");
+  if (draft.productionStage !== "export") {
+    draft.productionStage = normalizeProductionStage(draft.productionStage || "production");
+  }
 
   const subtitlePath = path.join(rootDir, draft.assets.subtitlePath);
   await fs.writeFile(subtitlePath, toSrt(draft.subtitleEntries), "utf8");
@@ -706,6 +711,10 @@ export async function updateDraftMeta(input) {
   if (input?.workflowStatus) {
     draft.workflowStatus = normalizeWorkflowStatus(input.workflowStatus);
     draft.workflowStatusLabel = getWorkflowStatusLabel(draft.workflowStatus);
+  }
+
+  if (input?.productionStage) {
+    draft.productionStage = normalizeProductionStage(input.productionStage);
   }
 
   draft.updatedAt = new Date().toISOString();
@@ -2269,6 +2278,17 @@ function ensureDraftStructure(rawDraft) {
     changed = true;
   }
 
+  if (!draft.productionStage) {
+    draft.productionStage = deriveDraftProductionStage(draft);
+    changed = true;
+  } else {
+    const normalizedStage = normalizeProductionStage(draft.productionStage);
+    if (normalizedStage !== draft.productionStage) {
+      draft.productionStage = normalizedStage;
+      changed = true;
+    }
+  }
+
   if (typeof draft.rawContent !== "string") {
     draft.rawContent = "";
     changed = true;
@@ -3074,6 +3094,23 @@ function normalizeWorkflowStatus(value) {
     return value;
   }
   return "";
+}
+
+function normalizeProductionStage(value) {
+  if (value === "script" || value === "production" || value === "export") {
+    return value;
+  }
+  return "script";
+}
+
+function deriveDraftProductionStage(draft) {
+  if (draft?.exportInfo?.videoReady || draft?.workflowStatus === "exported") {
+    return "export";
+  }
+  if ((draft?.qualityChecks || []).length || draft?.workflowStatus === "ready") {
+    return "production";
+  }
+  return "script";
 }
 
 function getCoverStyleLabel(style) {
