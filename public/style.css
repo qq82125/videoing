@@ -2082,6 +2082,7 @@ body {
 .workflow-dirty-chip {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   min-height: 28px;
   padding: 0 9px;
   border-radius: 999px;
@@ -2091,6 +2092,11 @@ body {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.03em;
+  cursor: pointer;
+}
+
+.workflow-dirty-chip:hover {
+  transform: translateY(-1px);
 }
 
 .workflow-dirty-chip.is-dirty {

@@ -237,6 +237,7 @@ function attachEvents() {
   historyToggleBtn?.addEventListener("click", toggleHistoryPanel);
   activeStageChip?.addEventListener("click", handleActiveStageChipClick);
   workflowPhaseCardEl?.addEventListener("click", handleActiveStageChipClick);
+  workflowDirtyChipsEl?.addEventListener("click", handleDirtyChipClick);
   serviceRetryBtn?.addEventListener("click", handleServiceRetry);
   railDrawerToggleBtn?.addEventListener("click", handleRailDrawerToggle);
   railDrawerBackdropEl?.addEventListener("click", () => setInputDrawerOpen(false));
@@ -719,7 +720,7 @@ function renderWorkflowControl(recommendation, draft) {
   applyProductionStageTone(workflowPhaseCardEl, currentProductionStage, "workflow-phase-card");
   if (workflowDirtyChipsEl) {
     workflowDirtyChipsEl.innerHTML = recommendation.dirtyChips.map((chip) => (
-      `<span class="workflow-dirty-chip is-${chip.tone}">${chip.label}</span>`
+      `<button type="button" class="workflow-dirty-chip is-${chip.tone}" data-dirty-target="${chip.target || "#section-preview"}">${chip.label}</button>`
     )).join("");
   }
   if (workflowRecommendTitleEl) {
@@ -978,7 +979,7 @@ function getWorkflowRecommendation(draft, state) {
   const audioOnlyDirty = audioDirty && !coverDirty && !storyboardDirty;
   const titleOnlyDirty = scriptDirty && !audioDirty && !coverDirty && !storyboardDirty;
   const dirtyChips = [
-    { label: scriptDirty ? "文案待同步" : "文案已同步", tone: scriptDirty ? "dirty" : "clean" },
+    { label: scriptDirty ? "文案待同步" : "文案已同步", tone: scriptDirty ? "dirty" : "clean", target: "#section-script" },
     {
       label: state.stage === "script" || audioDirty
         ? "口播待同步"
@@ -988,9 +989,10 @@ function getWorkflowRecommendation(draft, state) {
         : audioDirty
           ? "dirty"
           : "clean",
+      target: "#section-script",
     },
-    { label: storyboardDirty ? "分镜待同步" : "分镜已同步", tone: storyboardDirty ? "dirty" : "clean" },
-    { label: coverDirty ? "封面待同步" : "封面已同步", tone: coverDirty ? "dirty" : "clean" },
+    { label: storyboardDirty ? "分镜待同步" : "分镜已同步", tone: storyboardDirty ? "dirty" : "clean", target: "#section-storyboard" },
+    { label: coverDirty ? "封面待同步" : "封面已同步", tone: coverDirty ? "dirty" : "clean", target: "#section-preview" },
   ];
 
   if (state.stage === "script") {
@@ -1543,6 +1545,15 @@ function handleActiveStageChipClick() {
     return;
   }
   document.querySelector(getProductionStageTarget(currentProductionStage))?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function handleDirtyChipClick(event) {
+  const button = event.target?.closest?.("[data-dirty-target]");
+  const target = button?.dataset?.dirtyTarget;
+  if (!target || !currentDraftId) {
+    return;
+  }
+  document.querySelector(target)?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function deriveProductionStage(draft) {
