@@ -236,6 +236,7 @@ function attachEvents() {
   historyStarredFilter?.addEventListener("change", () => loadDraftHistory());
   historyToggleBtn?.addEventListener("click", toggleHistoryPanel);
   activeStageChip?.addEventListener("click", handleActiveStageChipClick);
+  workflowPhaseCardEl?.addEventListener("click", handleActiveStageChipClick);
   serviceRetryBtn?.addEventListener("click", handleServiceRetry);
   railDrawerToggleBtn?.addEventListener("click", handleRailDrawerToggle);
   railDrawerBackdropEl?.addEventListener("click", () => setInputDrawerOpen(false));
