@@ -1492,6 +1492,7 @@ body {
 .active-chip {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   min-height: 34px;
   padding: 0 12px;
   border-radius: 999px;
@@ -1503,9 +1504,14 @@ body {
 }
 
 .active-chip-stage {
+  cursor: pointer;
   color: rgba(120, 216, 245, 0.96);
   background: linear-gradient(180deg, rgba(120, 216, 245, 0.16), rgba(120, 216, 245, 0.08));
   border-color: rgba(120, 216, 245, 0.22);
+}
+
+.active-chip-stage:hover {
+  transform: translateY(-1px);
 }
 
 .active-chip-stage-script {

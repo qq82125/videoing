@@ -29,6 +29,7 @@ const scriptPrepSummaryEl = document.querySelector("#script-prep-summary");
 const scriptPrepMetricsEl = document.querySelector("#script-prep-metrics");
 const scriptPrepListEl = document.querySelector("#script-prep-list");
 const confirmScriptBtn = document.querySelector("#confirm-script-btn");
+const activeStageChip = document.querySelector("#active-stage-chip");
 const activeTitleChip = document.querySelector("#active-title-chip");
 const activeCoverChip = document.querySelector("#active-cover-chip");
 const historyList = document.querySelector("#history-list");
@@ -113,7 +114,6 @@ const releaseControlMetaEl = document.querySelector("#release-control-meta");
 const currentTopicEl = document.querySelector("#current-topic");
 const currentMetaEl = document.querySelector("#current-meta");
 const currentUpdatedEl = document.querySelector("#current-updated");
-const activeStageChip = document.querySelector("#active-stage-chip");
 const editorStateEl = document.querySelector("#editor-state");
 const editorGroupTitleEl = document.querySelector("#editor-group-title");
 const editorGroupCoverEl = document.querySelector("#editor-group-cover");
@@ -235,6 +235,7 @@ function attachEvents() {
   historySort?.addEventListener("change", () => loadDraftHistory());
   historyStarredFilter?.addEventListener("change", () => loadDraftHistory());
   historyToggleBtn?.addEventListener("click", toggleHistoryPanel);
+  activeStageChip?.addEventListener("click", handleActiveStageChipClick);
   serviceRetryBtn?.addEventListener("click", handleServiceRetry);
   railDrawerToggleBtn?.addEventListener("click", handleRailDrawerToggle);
   railDrawerBackdropEl?.addEventListener("click", () => setInputDrawerOpen(false));
@@ -1526,6 +1527,23 @@ function handleConfirmScriptStage() {
   setProductionStage("production");
   setStatus("预制脚本已确认，接下来进入试产打磨。", "success");
   document.querySelector("#section-preview")?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function getProductionStageTarget(stage) {
+  if (stage === "export") {
+    return "#section-export";
+  }
+  if (stage === "production") {
+    return "#section-preview";
+  }
+  return "#section-prep";
+}
+
+function handleActiveStageChipClick() {
+  if (!currentDraftId) {
+    return;
+  }
+  document.querySelector(getProductionStageTarget(currentProductionStage))?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function deriveProductionStage(draft) {
