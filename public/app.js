@@ -980,19 +980,17 @@ function getWorkflowRecommendation(draft, state) {
   const dirtyChips = [
     { label: scriptDirty ? "文案待同步" : "文案已同步", tone: scriptDirty ? "dirty" : "clean" },
     {
-      label: state.stage === "script"
-        ? "口播/字幕未试产"
-        : audioDirty
-          ? "口播待重建"
-          : "口播已同步",
+      label: state.stage === "script" || audioDirty
+        ? "口播待同步"
+        : "口播已同步",
       tone: state.stage === "script"
         ? "dirty"
         : audioDirty
           ? "dirty"
           : "clean",
     },
-    { label: storyboardDirty ? "分镜待重建" : "分镜已同步", tone: storyboardDirty ? "dirty" : "clean" },
-    { label: coverDirty ? "封面待重建" : "封面已同步", tone: coverDirty ? "dirty" : "clean" },
+    { label: storyboardDirty ? "分镜待同步" : "分镜已同步", tone: storyboardDirty ? "dirty" : "clean" },
+    { label: coverDirty ? "封面待同步" : "封面已同步", tone: coverDirty ? "dirty" : "clean" },
   ];
 
   if (state.stage === "script") {
@@ -1081,12 +1079,12 @@ function getWorkflowRecommendation(draft, state) {
   if (storyboardDirty) {
     return {
       phase: "storyboard",
-      phaseTitle: "分镜待重建",
-      phaseText: "分镜结构已经发生变化，建议先局部重建受影响镜头，再决定是否完整试产。",
+      phaseTitle: "分镜待同步",
+      phaseText: "分镜结构已经发生变化，建议先同步受影响镜头，再决定是否完整试产。",
       dirtyChips,
-      title: "先局部重建当前镜头",
-      text: "如果只是局部镜头有问题，优先局部重建，不要直接整条完整试产。",
-      buttonLabel: "重建当前镜头",
+      title: "先同步当前镜头",
+      text: "如果只是局部镜头有问题，优先同步当前镜头，不要直接整条完整试产。",
+      buttonLabel: "同步当前镜头",
       action: "click",
       target: "#partial-scene-btn",
       recommendedAction: "partial",
@@ -1169,7 +1167,7 @@ function updateTrialActionState(recommendation) {
     partialAudioBtn.textContent = currentProductionStage === "script"
       ? "脚本确认后可同步口播"
       : hasUnsavedChanges && currentDirtyState.audio
-        ? "同步并重建口播 / 字幕"
+        ? "同步口播 / 字幕"
         : "口播 / 字幕已同步";
   }
   if (editorAudioBtn) {
@@ -1177,7 +1175,7 @@ function updateTrialActionState(recommendation) {
     editorAudioBtn.textContent = currentProductionStage === "script"
       ? "脚本确认后可同步口播"
       : hasUnsavedChanges && currentDirtyState.audio
-        ? "同步并重建口播 / 字幕"
+        ? "同步口播 / 字幕"
         : "口播 / 字幕已同步";
   }
   if (partialCoverBtn) {
@@ -1185,7 +1183,7 @@ function updateTrialActionState(recommendation) {
     partialCoverBtn.textContent = currentProductionStage === "script"
       ? "脚本确认后可同步封面"
       : hasUnsavedChanges && currentDirtyState.cover
-        ? "同步并重建封面"
+        ? "同步封面"
         : "封面已同步";
   }
   if (editorCoverBtn) {
@@ -1193,24 +1191,24 @@ function updateTrialActionState(recommendation) {
     editorCoverBtn.textContent = currentProductionStage === "script"
       ? "脚本确认后可同步封面"
       : hasUnsavedChanges && currentDirtyState.cover
-        ? "同步并重建封面"
+        ? "同步封面"
         : "封面已同步";
   }
   if (partialSceneBtn) {
     partialSceneBtn.disabled = sceneDisabled;
     partialSceneBtn.textContent = currentProductionStage === "script"
-      ? "脚本确认后可重建镜头"
+      ? "脚本确认后可同步镜头"
       : storyboardDraftState.length
-        ? `重建当前镜头：${sceneLabel}`
-        : "当前无可重建镜头";
+        ? `同步当前镜头：${sceneLabel}`
+        : "当前无可同步镜头";
   }
   if (storyboardPartialBtn) {
     storyboardPartialBtn.disabled = sceneDisabled;
     storyboardPartialBtn.textContent = currentProductionStage === "script"
-      ? "脚本确认后可局部重建"
+      ? "脚本确认后可同步镜头"
       : storyboardDraftState.length
-        ? `重建当前镜头：${sceneLabel}`
-        : "当前无可重建镜头";
+        ? `同步当前镜头：${sceneLabel}`
+        : "当前无可同步镜头";
   }
   if (fullTrialBtn) {
     fullTrialBtn.disabled = currentProductionStage === "script";
@@ -1235,10 +1233,10 @@ function updateTrialActionState(recommendation) {
   }
   if (partialSceneMetaEl) {
     partialSceneMetaEl.textContent = currentProductionStage === "script"
-      ? "镜头层：脚本确认后再进入 scene 级重建"
+      ? "镜头层：脚本确认后再进入 scene 级同步"
       : storyboardDraftState.length
-        ? `镜头层：当前可对 ${sceneLabel} 做真实局部重建`
-        : "镜头层：当前没有可局部重建的 scene";
+        ? `镜头层：当前可对 ${sceneLabel} 做局部同步`
+        : "镜头层：当前没有可同步的 scene";
     partialSceneMetaEl.classList.toggle("is-dirty", !sceneDisabled && Boolean(storyboardDraftState.length));
     partialSceneMetaEl.classList.toggle("is-clean", sceneDisabled || !storyboardDraftState.length);
   }

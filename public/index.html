@@ -269,7 +269,7 @@
                   <p id="workflow-phase-text">先确认当前草稿方向是否成立，再决定下一步进入哪种修订。</p>
                 </button>
                 <div class="workflow-dirty-card">
-                  <span class="workflow-phase-label">当前脏区</span>
+                  <span class="workflow-phase-label">待同步</span>
                   <div id="workflow-dirty-chips" class="workflow-dirty-chips"></div>
                 </div>
                 <div class="workflow-recommend-card">
@@ -435,9 +435,9 @@
                     </article>
                     <article id="partial-rebuild-card" class="trial-action-card">
                       <div class="trial-action-copy">
-                        <span class="manage-label">局部动作</span>
+                        <span class="manage-label">局部同步</span>
                         <strong>只更新真正受影响的那一层</strong>
-                        <p class="manage-help">口播和封面会复用轻量同步路径，镜头支持真实 scene 级重建。先修局部，再决定要不要完整试产。</p>
+                        <p class="manage-help">口播、封面和镜头都尽量只同步受影响的部分。先做局部同步，再决定要不要完整试产。</p>
                       </div>
                       <div class="trial-action-meta">
                         <span id="partial-audio-meta">口播层：正文、CTA、时长改动后优先处理</span>
@@ -445,9 +445,9 @@
                         <span id="partial-scene-meta">镜头层：当前 scene 节奏或素材不对时再局部重建</span>
                       </div>
                       <div class="trial-action-buttons">
-                        <button id="partial-audio-btn" type="button" class="switch-btn">重建口播 / 字幕</button>
-                        <button id="partial-cover-btn" type="button" class="switch-btn">重建封面</button>
-                        <button id="partial-scene-btn" type="button" class="switch-btn">重建当前镜头</button>
+                        <button id="partial-audio-btn" type="button" class="switch-btn">同步口播 / 字幕</button>
+                        <button id="partial-cover-btn" type="button" class="switch-btn">同步封面</button>
+                        <button id="partial-scene-btn" type="button" class="switch-btn">同步当前镜头</button>
                       </div>
                     </article>
                     <article id="full-trial-card" class="trial-action-card">
@@ -541,8 +541,8 @@
                       <p>先看你动的是哪一层。正文和时长优先同步口播，封面文案优先同步封面，改动积累多了再做轻量试产。</p>
                     </div>
                     <div class="inline-actions-buttons">
-                      <button id="editor-audio-btn" type="button" class="switch-btn">重建口播 / 字幕</button>
-                      <button id="editor-cover-btn" type="button" class="switch-btn">重建封面</button>
+                      <button id="editor-audio-btn" type="button" class="switch-btn">同步口播 / 字幕</button>
+                      <button id="editor-cover-btn" type="button" class="switch-btn">同步封面</button>
                       <button id="editor-light-trial-btn" type="button" class="switch-btn switch-btn-primary">轻量试产这版文案</button>
                     </div>
                   </div>
@@ -631,7 +631,7 @@
                     <p>如果只是某个镜头出问题，优先局部重建当前镜头；只有整体节奏不顺，才考虑完整试产。</p>
                   </div>
                   <div class="inline-actions-buttons">
-                    <button id="storyboard-partial-btn" type="button" class="switch-btn">重建当前镜头</button>
+                    <button id="storyboard-partial-btn" type="button" class="switch-btn">同步当前镜头</button>
                     <button id="storyboard-full-trial-btn" type="button" class="switch-btn">完整试产这一版</button>
                   </div>
                 </div>
