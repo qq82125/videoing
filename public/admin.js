@@ -9,6 +9,7 @@ const serviceRetryBtn = document.querySelector("#service-retry-btn");
 const historyList = document.querySelector("#history-list");
 const historySearch = document.querySelector("#history-search");
 const historyStatusFilter = document.querySelector("#history-status-filter");
+const historyStageFilter = document.querySelector("#history-stage-filter");
 const historySort = document.querySelector("#history-sort");
 const historyStarredFilter = document.querySelector("#history-starred-filter");
 const historySummary = document.querySelector("#history-summary");
@@ -62,6 +63,7 @@ function boot() {
 function attachEvents() {
   historySearch?.addEventListener("input", debounce(() => loadDraftHistory(), 180));
   historyStatusFilter?.addEventListener("change", () => loadDraftHistory());
+  historyStageFilter?.addEventListener("change", () => loadDraftHistory());
   historySort?.addEventListener("change", () => loadDraftHistory());
   historyStarredFilter?.addEventListener("change", () => loadDraftHistory());
   historyToggleBtn?.addEventListener("click", toggleHistoryPanel);
@@ -384,6 +386,7 @@ async function loadDraftHistory() {
     const query = new URLSearchParams({
       q: historySearch?.value.trim() || "",
       workflowStatus: historyStatusFilter?.value || "all",
+      productionStage: historyStageFilter?.value || "all",
       sort: historySort?.value || "updated-desc",
       starred: historyStarredFilter?.checked ? "true" : "",
     });

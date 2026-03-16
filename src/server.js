@@ -92,6 +92,7 @@ const server = createServer(async (req, res) => {
       const payload = await listDrafts({
         q: url.searchParams.get("q") || "",
         workflowStatus: url.searchParams.get("workflowStatus") || "",
+        productionStage: url.searchParams.get("productionStage") || "",
         starred: url.searchParams.get("starred") || "",
         sort: url.searchParams.get("sort") || "",
       });
@@ -518,6 +519,7 @@ export async function listDrafts(filters = {}) {
         estimatedDurationSec: draft.estimatedDurationSec || draft.durationMode || 90,
         coverStyle: draft.coverStyle,
         coverStyleLabel: draft.coverStyleLabel,
+        productionStage: normalizeProductionStage(draft.productionStage || deriveDraftProductionStage(draft)),
         workflowStatus: draft.workflowStatus || "pending",
         workflowStatusLabel: draft.workflowStatusLabel || getWorkflowStatusLabel(draft.workflowStatus || "pending"),
         starred: Boolean(draft.starred),
@@ -533,6 +535,7 @@ export async function listDrafts(filters = {}) {
 
   const q = String(filters.q || "").trim().toLowerCase();
   const workflowStatus = normalizeWorkflowStatus(filters.workflowStatus || "");
+  const productionStage = String(filters.productionStage || "").trim();
   const starred = String(filters.starred || "");
 
   const filtered = drafts.filter((draft) => {
@@ -544,6 +547,10 @@ export async function listDrafts(filters = {}) {
     }
 
     if (workflowStatus && workflowStatus !== "all" && draft.workflowStatus !== workflowStatus) {
+      return false;
+    }
+
+    if (productionStage && productionStage !== "all" && draft.productionStage !== normalizeProductionStage(productionStage)) {
       return false;
     }
 
