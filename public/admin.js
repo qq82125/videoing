@@ -21,6 +21,7 @@ const adminSectionTitle = document.querySelector("#admin-section-title");
 const adminSectionDescription = document.querySelector("#admin-section-description");
 const adminOverviewSummary = document.querySelector("#admin-overview-summary");
 const adminProviderSummary = document.querySelector("#admin-provider-summary");
+const ADMIN_HISTORY_FILTER_STORAGE_KEY = "adminHistoryFilters";
 
 const ADMIN_SECTION_META = {
   overview: {
@@ -51,6 +52,7 @@ let latestDraftsSnapshot = [];
 boot();
 
 function boot() {
+  initHistoryFilters();
   attachEvents();
   initAdminSectionNav();
   initHistoryCollapse();
@@ -61,11 +63,26 @@ function boot() {
 }
 
 function attachEvents() {
-  historySearch?.addEventListener("input", debounce(() => loadDraftHistory(), 180));
-  historyStatusFilter?.addEventListener("change", () => loadDraftHistory());
-  historyStageFilter?.addEventListener("change", () => loadDraftHistory());
-  historySort?.addEventListener("change", () => loadDraftHistory());
-  historyStarredFilter?.addEventListener("change", () => loadDraftHistory());
+  historySearch?.addEventListener("input", debounce(() => {
+    persistHistoryFilters();
+    loadDraftHistory();
+  }, 180));
+  historyStatusFilter?.addEventListener("change", () => {
+    persistHistoryFilters();
+    loadDraftHistory();
+  });
+  historyStageFilter?.addEventListener("change", () => {
+    persistHistoryFilters();
+    loadDraftHistory();
+  });
+  historySort?.addEventListener("change", () => {
+    persistHistoryFilters();
+    loadDraftHistory();
+  });
+  historyStarredFilter?.addEventListener("change", () => {
+    persistHistoryFilters();
+    loadDraftHistory();
+  });
   historyToggleBtn?.addEventListener("click", toggleHistoryPanel);
   serviceRetryBtn?.addEventListener("click", handleServiceRetry);
   llmConfigReloadBtn?.addEventListener("click", handleReloadLlmConfig);
@@ -93,6 +110,44 @@ function initAdminSectionNav() {
 function getAdminSectionFromHash() {
   const hash = String(window.location.hash || "").replace(/^#/, "").trim();
   return ADMIN_SECTION_META[hash] ? hash : "";
+}
+
+function initHistoryFilters() {
+  try {
+    const raw = window.localStorage.getItem(ADMIN_HISTORY_FILTER_STORAGE_KEY);
+    const filters = raw ? JSON.parse(raw) : {};
+    if (historySearch && typeof filters.q === "string") {
+      historySearch.value = filters.q;
+    }
+    if (historyStatusFilter && typeof filters.workflowStatus === "string") {
+      historyStatusFilter.value = filters.workflowStatus || "all";
+    }
+    if (historyStageFilter && typeof filters.productionStage === "string") {
+      historyStageFilter.value = filters.productionStage || "all";
+    }
+    if (historySort && typeof filters.sort === "string") {
+      historySort.value = filters.sort || "updated-desc";
+    }
+    if (historyStarredFilter) {
+      historyStarredFilter.checked = filters.starred === "true";
+    }
+  } catch {
+    // ignore invalid persisted filters
+  }
+}
+
+function persistHistoryFilters() {
+  try {
+    window.localStorage.setItem(ADMIN_HISTORY_FILTER_STORAGE_KEY, JSON.stringify({
+      q: historySearch?.value.trim() || "",
+      workflowStatus: historyStatusFilter?.value || "all",
+      productionStage: historyStageFilter?.value || "all",
+      sort: historySort?.value || "updated-desc",
+      starred: historyStarredFilter?.checked ? "true" : "",
+    }));
+  } catch {
+    // ignore storage errors
+  }
 }
 
 function setActiveAdminSection(sectionId, options = {}) {
