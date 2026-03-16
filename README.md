@@ -4,6 +4,12 @@
 
 它把“输入主题 -> 预制脚本 -> 试产打磨 -> 导出成片”串成一条可反复修订的工作流，适合快速生成、回看、修改和导出竖屏短视频草稿。
 
+## 项目预览
+
+![Workflow overview](./docs/assets/workflow-overview.svg)
+
+![Workspace preview](./docs/assets/workspace-preview.svg)
+
 ## 现在能做什么
 
 - 输入 `主题` 或 `标题 / 正文`，生成视频草稿

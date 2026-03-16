@@ -1,0 +1,77 @@
+<svg width="1280" height="720" viewBox="0 0 1280 720" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="120" y1="60" x2="1140" y2="660" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0D1C2A"/>
+      <stop offset="1" stop-color="#08131E"/>
+    </linearGradient>
+    <linearGradient id="panel" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#1B2A39"/>
+      <stop offset="1" stop-color="#132230"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#79DCF6"/>
+      <stop offset="1" stop-color="#58A8EE"/>
+    </linearGradient>
+    <filter id="shadow" x="-20" y="-20" width="1320" height="760" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="18" stdDeviation="24" flood-color="#02070D" flood-opacity="0.38"/>
+    </filter>
+  </defs>
+
+  <rect width="1280" height="720" rx="28" fill="url(#bg)"/>
+  <circle cx="1068" cy="136" r="220" fill="#103043" fill-opacity="0.32"/>
+  <circle cx="186" cy="624" r="180" fill="#0F2737" fill-opacity="0.28"/>
+
+  <g filter="url(#shadow)">
+    <rect x="56" y="48" width="1168" height="624" rx="30" fill="#0C1824" stroke="#203241"/>
+  </g>
+
+  <text x="92" y="118" fill="#F2F7FB" font-size="40" font-family="Arial, sans-serif" font-weight="700">IVD Video Workflow</text>
+  <text x="92" y="156" fill="#90A8BC" font-size="20" font-family="Arial, sans-serif">Input → Script Gate → Trial Production → Release Control</text>
+
+  <g>
+    <rect x="92" y="212" width="252" height="232" rx="24" fill="url(#panel)" stroke="#2C4153"/>
+    <text x="122" y="256" fill="#79DCF6" font-size="16" font-family="Arial, sans-serif" font-weight="700" letter-spacing="2">STEP 1</text>
+    <text x="122" y="312" fill="#F5FAFD" font-size="36" font-family="Arial, sans-serif" font-weight="700">输入设定</text>
+    <text x="122" y="360" fill="#A7BBCB" font-size="18" font-family="Arial, sans-serif">主题、角度、风格、时长</text>
+    <rect x="122" y="386" width="190" height="44" rx="14" fill="#223343" stroke="#355267"/>
+    <text x="144" y="414" fill="#F5FAFD" font-size="18" font-family="Arial, sans-serif">生成预制脚本</text>
+  </g>
+
+  <g>
+    <rect x="370" y="180" width="270" height="296" rx="24" fill="url(#panel)" stroke="#4AA9D7"/>
+    <rect x="392" y="206" width="120" height="30" rx="999" fill="#12354B" stroke="#4AA9D7"/>
+    <text x="414" y="226" fill="#79DCF6" font-size="14" font-family="Arial, sans-serif" font-weight="700">核心门禁</text>
+    <text x="400" y="282" fill="#F5FAFD" font-size="38" font-family="Arial, sans-serif" font-weight="700">预制脚本</text>
+    <text x="400" y="326" fill="#A7BBCB" font-size="18" font-family="Arial, sans-serif">先确认口播结构、节奏和时长</text>
+    <rect x="400" y="354" width="210" height="48" rx="16" fill="#122A39" stroke="#355267"/>
+    <text x="424" y="385" fill="#F5FAFD" font-size="18" font-family="Arial, sans-serif">重新生成 / 手动修改</text>
+    <rect x="400" y="416" width="210" height="48" rx="16" fill="url(#accent)"/>
+    <text x="432" y="447" fill="#062130" font-size="18" font-family="Arial, sans-serif" font-weight="700">脚本确认，进入试产</text>
+  </g>
+
+  <g>
+    <rect x="666" y="212" width="246" height="232" rx="24" fill="url(#panel)" stroke="#2C4153"/>
+    <text x="694" y="256" fill="#79DCF6" font-size="16" font-family="Arial, sans-serif" font-weight="700" letter-spacing="2">STEP 3</text>
+    <text x="694" y="312" fill="#F5FAFD" font-size="34" font-family="Arial, sans-serif" font-weight="700">试产打磨</text>
+    <text x="694" y="360" fill="#A7BBCB" font-size="18" font-family="Arial, sans-serif">轻量试产、局部重建、完整试产</text>
+    <rect x="694" y="390" width="184" height="16" rx="8" fill="#163244"/>
+    <rect x="694" y="390" width="126" height="16" rx="8" fill="url(#accent)"/>
+  </g>
+
+  <g>
+    <rect x="938" y="212" width="230" height="232" rx="24" fill="url(#panel)" stroke="#2C4153"/>
+    <text x="966" y="256" fill="#79DCF6" font-size="16" font-family="Arial, sans-serif" font-weight="700" letter-spacing="2">STEP 4</text>
+    <text x="966" y="312" fill="#F5FAFD" font-size="34" font-family="Arial, sans-serif" font-weight="700">发布判断</text>
+    <text x="966" y="360" fill="#A7BBCB" font-size="18" font-family="Arial, sans-serif">检查、可导出状态、成片记录</text>
+    <rect x="966" y="390" width="160" height="44" rx="14" fill="#223343" stroke="#355267"/>
+    <text x="992" y="418" fill="#F5FAFD" font-size="18" font-family="Arial, sans-serif">确认并导出</text>
+  </g>
+
+  <path d="M344 326H360" stroke="#3D566A" stroke-width="4" stroke-linecap="round"/>
+  <path d="M640 326H656" stroke="#3D566A" stroke-width="4" stroke-linecap="round"/>
+  <path d="M912 326H928" stroke="#3D566A" stroke-width="4" stroke-linecap="round"/>
+
+  <rect x="92" y="502" width="1076" height="122" rx="24" fill="#101E2B" stroke="#233648"/>
+  <text x="124" y="548" fill="#F5FAFD" font-size="28" font-family="Arial, sans-serif" font-weight="700">为什么这套流程更适合反复打磨</text>
+  <text x="124" y="590" fill="#A7BBCB" font-size="20" font-family="Arial, sans-serif">先把最便宜的“脚本结构”确认下来，再逐层进入口播、分镜和导出，减少无谓的语音合成与制图消耗。</text>
+</svg>

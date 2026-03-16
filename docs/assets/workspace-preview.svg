@@ -1,0 +1,58 @@
+<svg width="1280" height="800" viewBox="0 0 1280 800" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg2" x1="90" y1="40" x2="1180" y2="760" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0E1B28"/>
+      <stop offset="1" stop-color="#08121B"/>
+    </linearGradient>
+    <linearGradient id="panel2" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#1A2A39"/>
+      <stop offset="1" stop-color="#13202C"/>
+    </linearGradient>
+    <linearGradient id="accent2" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#79DCF6"/>
+      <stop offset="1" stop-color="#58A8EE"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1280" height="800" rx="28" fill="url(#bg2)"/>
+  <rect x="46" y="40" width="1188" height="720" rx="28" fill="#0B1722" stroke="#213242"/>
+
+  <text x="78" y="94" fill="#F3F8FC" font-size="34" font-family="Arial, sans-serif" font-weight="700">Production Workspace</text>
+  <text x="78" y="126" fill="#88A3B8" font-size="18" font-family="Arial, sans-serif">Single-draft workflow with script gate, trial actions, scene refinement and release control.</text>
+
+  <rect x="78" y="162" width="1120" height="120" rx="24" fill="#10202D" stroke="#294050"/>
+  <rect x="106" y="190" width="208" height="64" rx="18" fill="#162A39" stroke="#2E4658"/>
+  <text x="130" y="214" fill="#7EDAF5" font-size="13" font-family="Arial, sans-serif" font-weight="700">当前阶段</text>
+  <text x="130" y="248" fill="#F4FAFD" font-size="24" font-family="Arial, sans-serif" font-weight="700">试产打磨</text>
+  <rect x="336" y="190" width="360" height="64" rx="18" fill="#162A39" stroke="#2E4658"/>
+  <text x="360" y="214" fill="#7EDAF5" font-size="13" font-family="Arial, sans-serif" font-weight="700">当前脏区</text>
+  <text x="360" y="248" fill="#F4FAFD" font-size="22" font-family="Arial, sans-serif" font-weight="700">文案已同步 · 分镜待重建 · 封面已同步</text>
+  <rect x="720" y="190" width="450" height="64" rx="18" fill="#143044" stroke="#4AA9D7"/>
+  <text x="744" y="214" fill="#7EDAF5" font-size="13" font-family="Arial, sans-serif" font-weight="700">推荐动作</text>
+  <text x="744" y="248" fill="#F4FAFD" font-size="22" font-family="Arial, sans-serif" font-weight="700">先重建当前镜头，再决定是否完整试产</text>
+
+  <rect x="78" y="312" width="720" height="392" rx="24" fill="url(#panel2)" stroke="#2C4153"/>
+  <text x="108" y="352" fill="#F4FAFD" font-size="28" font-family="Arial, sans-serif" font-weight="700">Preview + Refinement</text>
+  <rect x="108" y="382" width="290" height="254" rx="20" fill="#122330" stroke="#30495A"/>
+  <rect x="128" y="402" width="250" height="170" rx="18" fill="#203545"/>
+  <text x="140" y="430" fill="#DCE9F3" font-size="15" font-family="Arial, sans-serif">封面 / 成片预览</text>
+  <rect x="420" y="382" width="348" height="82" rx="18" fill="#122330" stroke="#30495A"/>
+  <text x="444" y="408" fill="#7EDAF5" font-size="12" font-family="Arial, sans-serif" font-weight="700">这一轮先看什么</text>
+  <text x="444" y="440" fill="#F4FAFD" font-size="24" font-family="Arial, sans-serif" font-weight="700">先听 Hook 和停顿节奏</text>
+  <rect x="420" y="480" width="348" height="156" rx="18" fill="#122330" stroke="#30495A"/>
+  <text x="444" y="508" fill="#7EDAF5" font-size="12" font-family="Arial, sans-serif" font-weight="700">文案 / 口播 / 分镜</text>
+  <text x="444" y="544" fill="#F4FAFD" font-size="22" font-family="Arial, sans-serif" font-weight="700">轻量试产 · 局部重建 · 完整试产</text>
+  <text x="444" y="582" fill="#98B0C2" font-size="16" font-family="Arial, sans-serif">按脏区推荐动作，而不是一上来整条重跑。</text>
+
+  <rect x="826" y="312" width="372" height="392" rx="24" fill="url(#panel2)" stroke="#2C4153"/>
+  <text x="854" y="352" fill="#F4FAFD" font-size="28" font-family="Arial, sans-serif" font-weight="700">Release Control</text>
+  <rect x="854" y="382" width="316" height="94" rx="18" fill="#133142" stroke="#4AA9D7"/>
+  <text x="878" y="408" fill="#7EDAF5" font-size="12" font-family="Arial, sans-serif" font-weight="700">发布判断</text>
+  <text x="878" y="444" fill="#F4FAFD" font-size="24" font-family="Arial, sans-serif" font-weight="700">当前可以进入最终导出</text>
+  <rect x="854" y="494" width="316" height="120" rx="18" fill="#122330" stroke="#30495A"/>
+  <text x="878" y="520" fill="#7EDAF5" font-size="12" font-family="Arial, sans-serif" font-weight="700">检查与记录</text>
+  <text x="878" y="556" fill="#F4FAFD" font-size="20" font-family="Arial, sans-serif" font-weight="700">检查通过 · 成片未生成</text>
+  <text x="878" y="590" fill="#97AFC2" font-size="16" font-family="Arial, sans-serif">检查结果、导出状态和产物链接集中在右栏。</text>
+  <rect x="854" y="632" width="316" height="48" rx="16" fill="url(#accent2)"/>
+  <text x="960" y="663" fill="#072130" font-size="20" font-family="Arial, sans-serif" font-weight="700">确认并导出</text>
+</svg>
