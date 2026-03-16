@@ -1,0 +1,647 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>IVD 视频工作流</title>
+    <link rel="stylesheet" href="/style.css?v=20260315-admin-cleanup" />
+  </head>
+  <body>
+    <div class="site-shell">
+      <header class="site-topbar">
+        <div class="site-topbar-inner">
+          <a class="site-brand" href="/">
+            <span class="site-brand-mark">IVD</span>
+            <span class="site-brand-copy">
+              <strong>Video Studio</strong>
+              <small>Strategy workflow</small>
+            </span>
+          </a>
+          <nav class="site-nav" aria-label="主导航">
+            <a class="site-nav-link is-active" href="/">前台生产</a>
+            <a class="site-nav-link" href="/admin">Admin</a>
+          </nav>
+        </div>
+      </header>
+      <main class="shell">
+        <section id="app-shell" class="app-shell">
+        <aside class="rail">
+          <div class="rail-primary">
+            <button
+              id="rail-drawer-toggle"
+              type="button"
+              class="rail-drawer-toggle hidden"
+              aria-expanded="false"
+              aria-controls="draft-form"
+            >
+              <span class="rail-drawer-toggle-kicker">Production</span>
+              <span class="rail-drawer-toggle-label">编辑输入</span>
+            </button>
+            <section class="hero panel panel-hero">
+              <p class="eyebrow">IVD VIDEO STUDIO</p>
+              <h1>从主题到草稿</h1>
+              <p class="lede">先填输入，再生成可编辑的成片草稿。</p>
+            </section>
+
+            <section class="panel control-panel">
+              <div class="section-head section-head-row">
+                <div>
+                  <h2>新建草稿</h2>
+                  <p>设定输入、表达和输出后开始生成。</p>
+                </div>
+                <div class="control-actions">
+                  <button id="preview-workspace-btn" type="button" class="switch-btn">预览</button>
+                  <button id="random-example-btn" type="button" class="switch-btn">示例</button>
+                  <button id="clear-form-btn" type="button" class="switch-btn">清空</button>
+                </div>
+              </div>
+              <form id="draft-form" class="draft-form">
+                <section class="form-cluster">
+                  <div class="form-cluster-head">
+                    <strong>输入</strong>
+                    <span>从主题或现成内容开始</span>
+                  </div>
+                  <fieldset class="source-picker">
+                    <legend>输入来源</legend>
+                    <label class="style-option">
+                      <input type="radio" name="sourceType" value="topic" checked />
+                      <span>主题</span>
+                    </label>
+                    <label class="style-option">
+                      <input type="radio" name="sourceType" value="article" />
+                      <span>标题 / 正文</span>
+                    </label>
+                  </fieldset>
+                  <label id="topic-field">
+                    <span>主题</span>
+                    <input id="topic" name="topic" placeholder="例如：集采后 IVD 渠道的下一轮机会在哪里" />
+                  </label>
+                  <label id="raw-content-field" class="hidden">
+                    <span>标题 / 正文</span>
+                    <textarea id="raw-content" name="rawContent" rows="7" placeholder="可以直接粘贴文章标题、一段正文，或标题加正文。系统会先提炼核心信息，再改写成适合视频号的视频文案。"></textarea>
+                  </label>
+                </section>
+                <section class="form-cluster">
+                  <div class="form-cluster-head">
+                    <strong>表达</strong>
+                    <span>控制视角、受众和改写方式</span>
+                  </div>
+                  <div class="field-row">
+                    <label>
+                      <span>补充角度</span>
+                      <input id="angle" name="angle" placeholder="例如：从终端实验室价值出发" />
+                    </label>
+                    <label>
+                      <span>改写风格</span>
+                      <select id="rewrite-style" name="rewriteStyle">
+                        <option value="industry_observation" selected>行业观察</option>
+                        <option value="deep_analysis">深度解读</option>
+                        <option value="point_breakdown">观点拆解</option>
+                      </select>
+                    </label>
+                  </div>
+                </section>
+                <section class="form-cluster">
+                  <div class="form-cluster-head">
+                    <strong>输出</strong>
+                    <span>确定时长和封面风格</span>
+                  </div>
+                  <div class="field-row field-row-output">
+                    <label>
+                      <span>时长模式</span>
+                      <select id="duration-mode" name="durationMode">
+                        <option value="60">60 秒</option>
+                        <option value="90" selected>90 秒</option>
+                        <option value="120">120 秒</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>封面风格</span>
+                      <select id="cover-style-select" name="coverStyle">
+                        <option value="report" selected>行业报告风</option>
+                        <option value="viral">爆款短视频风</option>
+                      </select>
+                    </label>
+                  </div>
+                </section>
+                <button id="generate-btn" type="submit">生成草稿</button>
+              </form>
+              <p id="status" class="status status-idle hidden"></p>
+              <section id="generate-progress" class="generate-progress hidden" aria-live="polite">
+                <div class="generate-progress-head">
+                  <strong id="generate-progress-title">正在准备生成</strong>
+                  <span id="generate-progress-step-count">1 / 5</span>
+                </div>
+                <div class="generate-progress-meta">
+                  <span id="generate-progress-elapsed">已耗时 0 秒</span>
+                  <span id="generate-progress-note">远程模型较慢时通常需要 30 到 90 秒。</span>
+                </div>
+                <div class="generate-progress-bar">
+                  <span id="generate-progress-fill"></span>
+                </div>
+                <ol id="generate-progress-steps" class="generate-progress-steps">
+                  <li class="is-active">生成文案</li>
+                  <li>生成分镜</li>
+                  <li>生成图片</li>
+                  <li>生成配音</li>
+                  <li>整理草稿</li>
+                </ol>
+              </section>
+            </section>
+          </div>
+        </aside>
+        <button id="rail-drawer-backdrop" type="button" class="rail-drawer-backdrop hidden" aria-label="关闭输入抽屉"></button>
+
+        <section class="workspace">
+          <section id="empty-state" class="panel empty-state">
+            <div class="empty-state-hero">
+              <div class="empty-state-copy">
+                <p class="empty-state-eyebrow">生产态预览</p>
+                <p class="empty-state-lede">生成后会切到更大的生产态，先筛方案，再处理导出、文案和分镜。</p>
+              </div>
+              <div class="empty-state-flow">
+                <span>1. 启动设定</span>
+                <span>2. 候选方案筛选</span>
+                <span>3. 导出与复核</span>
+              </div>
+            </div>
+            <div class="empty-state-grid">
+              <article class="empty-card empty-card-presets">
+                <div class="empty-card-head">
+                  <div>
+                    <strong>推荐预设</strong>
+                    <p>直接填一个主题，快速起第一条草稿。</p>
+                    <span class="empty-card-badge">快速启动</span>
+                  </div>
+                </div>
+                <div class="launch-presets">
+                  <button
+                    type="button"
+                    class="switch-btn suggest-topic-btn launch-preset"
+                    data-topic="集采后 IVD 渠道的下一轮机会在哪里"
+                    data-angle="从终端实验室价值和渠道效率角度"
+                    data-audience="IVD 企业管理层、渠道负责人"
+                  >
+                    <strong>集采后 IVD 渠道的下一轮机会</strong>
+                    <span>适合验证行业观察 + 渠道策略类视频的标准链路。</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="switch-btn suggest-topic-btn launch-preset"
+                    data-topic="IVD 出海最容易被低估的门槛是什么"
+                    data-angle="从注册、本地化交付和海外渠道协同角度"
+                    data-audience="IVD 海外业务负责人、市场负责人"
+                  >
+                    <strong>IVD 出海最容易被低估的门槛</strong>
+                    <span>更适合测试深度解读和结构拆解型表达。</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="switch-btn suggest-topic-btn launch-preset"
+                    data-topic="终端实验室为什么重新变重要了"
+                    data-angle="从终端决策权、服务能力和长期采购逻辑角度"
+                    data-audience="IVD 市场负责人、实验室管理者"
+                  >
+                    <strong>终端实验室为什么重新变重要了</strong>
+                    <span>适合测试终端价值、服务能力和长期采购逻辑。</span>
+                  </button>
+                </div>
+              </article>
+              <div class="empty-state-side">
+                <article class="empty-card empty-card-steps">
+                  <div class="empty-card-head">
+                    <div>
+                      <strong>生产态会展开什么</strong>
+                      <p>生成后右侧会切换成更完整的编辑和导出工作区。</p>
+                    </div>
+                  </div>
+                  <div class="launch-step-list">
+                    <div class="launch-step">
+                      <span class="launch-step-index">A</span>
+                      <div>
+                        <h3>候选方案先筛选</h3>
+                        <p>先比标题和封面，再定当前版本。</p>
+                      </div>
+                    </div>
+                    <div class="launch-step">
+                      <span class="launch-step-index">B</span>
+                      <div>
+                        <h3>输出态单独管理</h3>
+                        <p>检查、状态和导出产物集中展示。</p>
+                      </div>
+                    </div>
+                    <div class="launch-step">
+                      <span class="launch-step-index">C</span>
+                      <div>
+                        <h3>编辑和分镜分层展开</h3>
+                        <p>先改文案，再精修分镜节奏。</p>
+                      </div>
+                    </div>
+                  </div>
+                </article>
+                <article id="resume-card" class="empty-card empty-card-resume hidden">
+                  <div class="empty-card-head">
+                    <div>
+                      <strong>继续上次草稿</strong>
+                      <p id="resume-card-text"></p>
+                    </div>
+                    <span class="empty-card-badge">继续生产</span>
+                  </div>
+                  <button id="resume-last-draft-btn" type="button" class="switch-btn">继续编辑</button>
+                </article>
+              </div>
+            </div>
+          </section>
+
+          <section id="result" class="result hidden">
+            <section class="panel workflow-panel workflow-panel-top">
+              <div class="workflow-panel-head">
+                <div>
+                  <p class="workspace-section-eyebrow">生产流程</p>
+                  <h2>按流程一步步把草稿推进成成片</h2>
+                </div>
+                <p>输入阶段已经确定方向，进入生产态后就围绕当前草稿推进：先预览，再改文案和分镜，最后检查并导出。</p>
+              </div>
+              <div class="workflow-status-strip">
+                <div class="workflow-phase-card is-primary">
+                  <span class="workflow-phase-label">当前阶段</span>
+                  <strong id="workflow-phase-title">试产打磨</strong>
+                  <p id="workflow-phase-text">先确认当前草稿方向是否成立，再决定下一步进入哪种修订。</p>
+                </div>
+                <div class="workflow-dirty-card">
+                  <span class="workflow-phase-label">当前脏区</span>
+                  <div id="workflow-dirty-chips" class="workflow-dirty-chips"></div>
+                </div>
+                <div class="workflow-recommend-card">
+                  <span class="workflow-phase-label">推荐动作</span>
+                  <strong id="workflow-recommend-title">先看预览</strong>
+                  <p id="workflow-recommend-text">先判断这版是否值得继续往后推进，再决定改文案还是改分镜。</p>
+                  <button id="workflow-recommend-btn" type="button" class="switch-btn switch-btn-primary">查看当前预览</button>
+                </div>
+              </div>
+              <div id="workflow-map" class="workflow-map"></div>
+              <div class="workflow-guide-grid">
+                <article class="workflow-current-card">
+                  <div class="workflow-current-copy">
+                    <p class="workflow-current-kicker">当前草稿</p>
+                    <h3 id="current-topic" class="summary-title"></h3>
+                    <p id="current-meta" class="summary-meta"></p>
+                    <p id="current-updated" class="summary-updated"></p>
+                  </div>
+                  <div class="workflow-current-chips">
+                    <span id="active-title-chip" class="active-chip">90 秒</span>
+                    <span id="active-cover-chip" class="active-chip">行业报告风</span>
+                  </div>
+                  <div class="workflow-current-actions">
+                    <a href="#section-prep" class="switch-btn">看预制脚本</a>
+                    <a href="#section-script" class="switch-btn">去改文案</a>
+                    <a href="#section-storyboard" class="switch-btn">去修分镜</a>
+                  </div>
+                </article>
+                <article class="workflow-operate-card">
+                  <div class="workflow-operate-head">
+                    <strong>正确操作顺序</strong>
+                    <p>先确认脚本结构，再进入试产判断。把最重的精修动作留在后面，避免一开始就进入细节泥潭。</p>
+                  </div>
+                  <ol class="workflow-operate-list">
+                    <li>先在预制脚本区确认每段作用、预计时长和整体节奏。</li>
+                    <li>确认脚本后，再进入试产区看封面、标题和口播方向。</li>
+                    <li>如果表达不顺，先改文案并保存，再重新听口播和看字幕。</li>
+                    <li>只有当节奏或镜头不合适时，再进入分镜区精修。</li>
+                    <li>最后执行导出前检查，确认通过后再导出成片。</li>
+                  </ol>
+                </article>
+              </div>
+            </section>
+
+            <section id="section-prep" class="workspace-section script-prep-stage">
+              <div class="workspace-section-head">
+                <div>
+                  <p class="workspace-section-eyebrow">预制阶段</p>
+                  <h2>先确认口播脚本和分段节奏</h2>
+                </div>
+                <p>这一阶段只确认“讲什么、怎么讲、讲多久”。还不触发声音、字幕、画面和导出，先把最便宜、最关键的层确认下来。</p>
+              </div>
+              <article class="panel script-prep-panel">
+                <div class="script-prep-top">
+                  <div class="script-prep-copy">
+                    <div>
+                      <strong>预制脚本</strong>
+                      <p id="script-prep-summary">先看每段时长和作用，再决定是否进入试产。</p>
+                    </div>
+                    <div class="script-prep-actions">
+                      <a href="#section-script" class="switch-btn">继续修脚本</a>
+                      <button id="confirm-script-btn" type="button" class="switch-btn switch-btn-primary">脚本确认，进入试产</button>
+                    </div>
+                  </div>
+                  <div id="script-prep-metrics" class="script-prep-metrics"></div>
+                </div>
+                <div id="script-prep-list" class="script-prep-list"></div>
+              </article>
+            </section>
+
+            <section id="section-preview" class="workspace-section workspace-stage" data-production-stage="production">
+              <div class="workspace-section-head">
+                <div>
+                  <p class="workspace-section-eyebrow">第二步</p>
+                  <h2>先看当前草稿是否可用</h2>
+                </div>
+                <p>先确认封面、标题、口播和当前状态是否在一个方向上。这里只做判断，不急着改细节。</p>
+              </div>
+              <div class="workspace-stage-grid">
+                <div class="stage-main-column">
+                  <article class="panel preview-panel">
+                    <div class="section-head">
+                      <h2>成片预览</h2>
+                      <p>先确认这一版的第一屏冲击力、标题表达和口播状态，判断它值不值得继续往后推进。</p>
+                      <div class="section-recommend">
+                        <span class="manage-label">这一轮先看什么</span>
+                        <strong id="preview-recommend-title">先看标题和封面是否同向</strong>
+                        <p id="preview-recommend-text" class="manage-help">先判断第一屏冲击力和封面标题是否一致，再决定是去改文案、同步口播，还是进入分镜精修。</p>
+                      </div>
+                    </div>
+                    <div class="preview-stage">
+                      <div class="preview-canvas-shell">
+                        <div class="preview-canvas">
+                          <img id="cover-image" alt="封面预览" class="cover-image" />
+                          <div class="preview-overlay">
+                            <div class="preview-kicker">
+                              <span class="preview-edition">IVD Strategy Brief</span>
+                              <span class="preview-chip">竖屏成片</span>
+                              <span id="cover-style-text" class="preview-chip preview-chip-muted"></span>
+                              <span id="preview-focus-chip" class="preview-chip preview-chip-soft">当前查看：整体成片</span>
+                            </div>
+                            <p id="title-text" class="title-text"></p>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="preview-stage-meta">
+                        <div id="preview-combo-text" class="preview-combo-text">当前版本已锁定，接下来围绕这一版继续精修。</div>
+                        <div class="preview-note">如果方向没问题，就继续改文案；如果还不顺，再去动分镜。</div>
+                      </div>
+                      <div class="preview-audio">
+                        <div class="preview-audio-head">
+                          <div>
+                            <h3>口播预听</h3>
+                            <p>确认语气、节奏和停顿是否顺耳。</p>
+                          </div>
+                        </div>
+                        <audio id="audio-player" controls></audio>
+                      </div>
+                    </div>
+                  </article>
+                </div>
+
+                <article id="section-export" class="panel manage-panel manage-panel-sticky">
+                  <div class="section-head">
+                    <div class="manage-kicker">输出态</div>
+                    <h2>检查、状态与导出</h2>
+                    <p>把系统检查、人工阶段和导出产物放在一起，随时知道这条视频现在推进到哪里。</p>
+                    <div class="section-recommend">
+                      <span class="manage-label">这一块现在最建议</span>
+                      <strong id="export-recommend-title">先跑一次导出前检查</strong>
+                      <p id="export-recommend-text" class="manage-help">先确认阻塞项和提醒项，再决定是继续回改还是直接导出。</p>
+                    </div>
+                  </div>
+                  <div id="release-control" class="release-control release-control-idle">
+                    <div class="release-control-head">
+                      <span class="manage-label">发布判断</span>
+                      <strong id="release-control-title">还不能判断是否可导出</strong>
+                    </div>
+                    <p id="release-control-text" class="manage-help">先跑一次导出前检查，系统才知道当前离成片还差什么。</p>
+                    <div id="release-control-meta" class="release-control-meta"></div>
+                  </div>
+                  <div class="manage-recommend">
+                    <div class="manage-recommend-copy">
+                      <span class="manage-label">当前最建议</span>
+                      <strong id="manage-recommend-title">先看当前预览</strong>
+                      <p id="manage-recommend-text" class="manage-help">确认方向后，再决定进入文案修改、分镜精修还是导出检查。</p>
+                    </div>
+                    <button id="manage-recommend-btn" type="button" class="switch-btn switch-btn-primary">查看预览</button>
+                  </div>
+                  <div class="trial-actions">
+                    <article id="light-trial-card" class="trial-action-card">
+                      <div class="trial-action-copy">
+                        <span class="manage-label">轻量试产</span>
+                        <strong>快速验证节奏和表达</strong>
+                        <p class="manage-help">只同步当前文案，并重建口播、字幕和封面，用于快速判断这版是否成立。</p>
+                      </div>
+                      <div class="trial-action-meta">
+                        <span>会重建：口播、字幕、封面</span>
+                        <span>不会重建：分镜素材、最终导出</span>
+                      </div>
+                      <button id="light-trial-btn" type="button" class="switch-btn switch-btn-primary">开始轻量试产</button>
+                    </article>
+                    <article id="partial-rebuild-card" class="trial-action-card">
+                      <div class="trial-action-copy">
+                        <span class="manage-label">局部动作</span>
+                        <strong>只更新真正受影响的那一层</strong>
+                        <p class="manage-help">口播和封面会复用轻量同步路径，镜头支持真实 scene 级重建。先修局部，再决定要不要完整试产。</p>
+                      </div>
+                      <div class="trial-action-meta">
+                        <span id="partial-audio-meta">口播层：正文、CTA、时长改动后优先处理</span>
+                        <span id="partial-cover-meta">封面层：封面标题、副标题或封面风格调整后处理</span>
+                        <span id="partial-scene-meta">镜头层：当前 scene 节奏或素材不对时再局部重建</span>
+                      </div>
+                      <div class="trial-action-buttons">
+                        <button id="partial-audio-btn" type="button" class="switch-btn">重建口播 / 字幕</button>
+                        <button id="partial-cover-btn" type="button" class="switch-btn">重建封面</button>
+                        <button id="partial-scene-btn" type="button" class="switch-btn">重建当前镜头</button>
+                      </div>
+                    </article>
+                    <article id="full-trial-card" class="trial-action-card">
+                      <div class="trial-action-copy">
+                        <span class="manage-label">完整试产</span>
+                        <strong>生成一版更完整的试产结果</strong>
+                        <p class="manage-help">适合在文案和分镜基本稳定后使用，会先同步当前草稿，再执行导出前检查。</p>
+                      </div>
+                      <div class="trial-action-meta">
+                        <span>会执行：草稿同步、导出前检查</span>
+                        <span>用于确认整体完成度，再决定是否导出</span>
+                      </div>
+                      <button id="full-trial-btn" type="button" class="switch-btn">开始完整试产</button>
+                    </article>
+                  </div>
+                  <div class="manage-toolbar manage-toolbar-secondary">
+                    <div class="manage-group">
+                      <span class="manage-label">系统检查</span>
+                      <div class="meta-actions">
+                        <button id="check-btn" type="button" class="switch-btn">导出前检查</button>
+                      </div>
+                      <p class="manage-help">检查标题、正文、封面、音频、字幕和 ffmpeg 是否满足导出条件。</p>
+                    </div>
+                    <div class="manage-group">
+                      <span class="manage-label">工作流状态</span>
+                      <div class="meta-actions">
+                        <button id="star-btn" type="button" class="switch-btn">收藏</button>
+                        <select id="workflow-status-select">
+                          <option value="pending">待处理</option>
+                          <option value="revised">待修改</option>
+                          <option value="ready">可导出</option>
+                          <option value="exported">已导出</option>
+                          <option value="archived">已归档</option>
+                        </select>
+                      </div>
+                      <p class="manage-help">这是人工标记，不会自动跟着检查结果变化。</p>
+                    </div>
+                  </div>
+                  <div id="quality-overview" class="quality-overview quality-overview-idle">
+                    <strong id="quality-overview-title">还没有检查结论</strong>
+                    <p id="quality-overview-text">先运行一次导出前检查，这里会告诉你当前是否可以导出，以及建议的下一步动作。</p>
+                    <div id="quality-overview-actions" class="quality-overview-actions hidden">
+                      <button id="mark-ready-btn" type="button" class="switch-btn">标记为可导出</button>
+                    </div>
+                  </div>
+                  <div id="quality-list" class="quality-list"></div>
+                  <div id="export-summary" class="export-summary export-summary-idle">
+                    <div class="export-summary-head">
+                      <strong id="export-summary-title">还没有导出记录</strong>
+                      <span id="export-summary-time">等待第一次导出</span>
+                    </div>
+                    <p id="export-summary-message" class="export-summary-message">点击“确认并导出”后，这里会显示导出结果、脚本和视频产物状态。</p>
+                    <div id="export-summary-meta" class="export-summary-meta"></div>
+                    <div id="export-links" class="export-links hidden">
+                      <span class="export-links-label">导出产物</span>
+                      <div class="export-links-list">
+                        <a id="video-link" class="hidden" target="_blank" rel="noreferrer">打开导出视频</a>
+                        <a id="script-link" class="hidden" target="_blank" rel="noreferrer">查看导出脚本</a>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="actions">
+                    <button id="export-btn" type="button">确认并导出</button>
+                  </div>
+                </article>
+              </div>
+            </section>
+
+            <section id="section-script" class="workspace-section workspace-editor">
+              <div class="workspace-section-head">
+                <div>
+                  <p class="workspace-section-eyebrow">第三步</p>
+                  <h2>需要时先改文案，再回看口播和字幕</h2>
+                </div>
+                <p>文案是最容易影响整体观感的地方，所以优先留出更大的调整空间。改完以后，马上回听口播、回看字幕。</p>
+              </div>
+              <div class="workspace-editor-grid">
+                <article class="panel editor-panel">
+                  <div class="section-head">
+                    <h2>文案编辑</h2>
+                    <p>这里改的是当前草稿本体，保存后会重建音频、字幕和封面。</p>
+                    <div class="section-recommend">
+                      <span class="manage-label">这一块现在最建议</span>
+                      <strong id="editor-recommend-title">先同步口播 / 字幕</strong>
+                      <p id="editor-recommend-text" class="manage-help">正文、CTA 和时长改完后，优先回听口播和字幕，再决定是否继续精修。</p>
+                    </div>
+                  </div>
+                  <div class="inline-actions">
+                    <div class="inline-actions-copy">
+                      <strong>文案区动作</strong>
+                      <p>先看你动的是哪一层。正文和时长优先同步口播，封面文案优先同步封面，改动积累多了再做轻量试产。</p>
+                    </div>
+                    <div class="inline-actions-buttons">
+                      <button id="editor-audio-btn" type="button" class="switch-btn">重建口播 / 字幕</button>
+                      <button id="editor-cover-btn" type="button" class="switch-btn">重建封面</button>
+                      <button id="editor-light-trial-btn" type="button" class="switch-btn switch-btn-primary">轻量试产这版文案</button>
+                    </div>
+                  </div>
+                  <div id="editor-state" class="editor-state editor-state-synced">当前内容已同步。</div>
+                  <div class="editor-groups">
+                    <details id="editor-group-title" class="editor-group" open>
+                      <summary>标题版本 <span id="editor-group-title-status" class="editor-group-status">已同步</span></summary>
+                      <div class="editor-grid">
+                        <label><span>标题 A</span><input id="edit-title-a" /></label>
+                        <label><span>标题 B</span><input id="edit-title-b" /></label>
+                      </div>
+                    </details>
+                    <details id="editor-group-cover" class="editor-group">
+                      <summary>封面文案 <span id="editor-group-cover-status" class="editor-group-status">已同步</span></summary>
+                      <div class="editor-grid">
+                        <label><span>封面标题</span><input id="edit-cover-title" /></label>
+                        <label><span>封面副标题</span><input id="edit-cover-subtitle" /></label>
+                      </div>
+                    </details>
+                    <details id="editor-group-body" class="editor-group" open>
+                      <summary>正文结构 <span id="editor-group-body-status" class="editor-group-status">已同步</span></summary>
+                      <div class="editor-grid">
+                        <label><span>开头 Hook</span><textarea id="edit-hook" rows="3"></textarea></label>
+                        <label><span>第 1 段</span><textarea id="edit-section-1" rows="3"></textarea></label>
+                        <label><span>第 2 段</span><textarea id="edit-section-2" rows="3"></textarea></label>
+                        <label><span>第 3 段</span><textarea id="edit-section-3" rows="3"></textarea></label>
+                      </div>
+                    </details>
+                    <details id="editor-group-cta" class="editor-group">
+                      <summary>结尾引导 <span id="editor-group-cta-status" class="editor-group-status">已同步</span></summary>
+                      <div class="editor-grid">
+                        <label><span>结尾引导</span><textarea id="edit-cta" rows="3"></textarea></label>
+                      </div>
+                    </details>
+                  </div>
+                  <button id="save-draft-btn" type="button">保存文案并执行轻量试产</button>
+                </article>
+
+                <article class="panel script-panel">
+                  <div class="section-head">
+                    <h2>口播与字幕</h2>
+                    <p>文案一旦变动，优先在这里确认顺口程度和字幕切分是否自然。</p>
+                  </div>
+                  <div class="text-grid">
+                    <div>
+                      <div class="content-head">
+                        <h3>口播文案</h3>
+                        <button id="copy-script-btn" type="button" class="switch-btn">复制文案</button>
+                      </div>
+                      <div id="script-view" class="script-view"></div>
+                    </div>
+                    <div>
+                      <div class="content-head">
+                        <h3>字幕时间轴</h3>
+                        <button id="copy-subtitle-btn" type="button" class="switch-btn">复制字幕</button>
+                      </div>
+                      <div id="subtitle-meta" class="subtitle-meta"></div>
+                      <div id="subtitle-view" class="subtitle-view"></div>
+                    </div>
+                  </div>
+                </article>
+              </div>
+            </section>
+
+            <section id="section-storyboard" class="workspace-section workspace-storyboard" data-production-stage="production">
+              <div class="workspace-section-head">
+                <div>
+                  <p class="workspace-section-eyebrow">第四步</p>
+                  <h2>最后再精修分镜顺序和镜头结构</h2>
+                </div>
+                <p>分镜是最复杂、最容易陷入精修的区域，所以放在最后，并且保留最大设计空间，后续可以继续强化镜头级工作流。</p>
+              </div>
+              <article class="panel storyboard-panel">
+                <div class="section-head">
+                  <h2>分镜预览与编辑</h2>
+                  <p>这里直接调整每个 scene 的标题、文案、镜头类型和时长。</p>
+                  <div class="section-recommend">
+                    <span class="manage-label">这一块现在最建议</span>
+                    <strong id="storyboard-recommend-title">先看当前镜头</strong>
+                    <p id="storyboard-recommend-text" class="manage-help">只有当局部镜头确实不顺时，再做当前镜头的局部重建。</p>
+                  </div>
+                </div>
+                <div class="inline-actions inline-actions-compact">
+                  <div class="inline-actions-copy">
+                    <strong>分镜区动作</strong>
+                    <p>如果只是某个镜头出问题，优先局部重建当前镜头；只有整体节奏不顺，才考虑完整试产。</p>
+                  </div>
+                  <div class="inline-actions-buttons">
+                    <button id="storyboard-partial-btn" type="button" class="switch-btn">重建当前镜头</button>
+                    <button id="storyboard-full-trial-btn" type="button" class="switch-btn">完整试产这一版</button>
+                  </div>
+                </div>
+                <div id="storyboard-list" class="storyboard-list"></div>
+              </article>
+            </section>
+          </section>
+        </section>
+        </section>
+      </main>
+    </div>
+    <script type="module" src="/app.js?v=20260315-admin-cleanup"></script>
+  </body>
+</html>

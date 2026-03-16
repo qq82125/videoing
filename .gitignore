@@ -1,0 +1,9 @@
+node_modules/
+.DS_Store
+
+data/drafts/
+data/logs/
+data/config/llm-config.json
+
+.env.local
+.env

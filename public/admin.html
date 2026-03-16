@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>IVD 视频工作流 Admin</title>
+    <link rel="stylesheet" href="/style.css?v=20260315-admin-cleanup" />
+  </head>
+  <body>
+    <div class="site-shell">
+      <header class="site-topbar">
+        <div class="site-topbar-inner">
+          <a class="site-brand" href="/">IVD Video Workflow</a>
+          <nav class="site-nav" aria-label="主导航">
+            <a class="site-nav-link" href="/">前台生产</a>
+            <a class="site-nav-link is-active" href="/admin">Admin</a>
+          </nav>
+        </div>
+      </header>
+
+      <main class="shell admin-shell">
+        <section class="panel admin-frame">
+          <aside class="admin-sidebar">
+            <div class="admin-sidebar-head">
+              <p class="eyebrow">ADMIN CONSOLE</p>
+              <h1>后台管理</h1>
+              <p>把运行状态、供应商配置、风控策略和草稿资产集中在一个后台里处理，生产页只保留核心生成链路。</p>
+            </div>
+            <nav class="admin-sidebar-nav" aria-label="Admin 模块导航">
+              <div class="admin-nav-group">
+                <p class="admin-nav-group-label">系统</p>
+                <button type="button" class="admin-nav-link is-active" data-admin-section-target="overview">
+                  <span class="admin-nav-index">01</span>
+                  <span class="admin-nav-copy">
+                    <strong>系统概览</strong>
+                    <small>确认服务、环境和远程链路状态。</small>
+                  </span>
+                </button>
+              </div>
+              <div class="admin-nav-group">
+                <p class="admin-nav-group-label">供应商</p>
+                <button type="button" class="admin-nav-link" data-admin-section-target="models">
+                  <span class="admin-nav-index">02</span>
+                  <span class="admin-nav-copy">
+                    <strong>模型与供应商</strong>
+                    <small>文案、分镜、即梦图片与豆包语音。</small>
+                  </span>
+                </button>
+              </div>
+              <div class="admin-nav-group">
+                <p class="admin-nav-group-label">合规</p>
+                <button type="button" class="admin-nav-link" data-admin-section-target="risk">
+                  <span class="admin-nav-index">03</span>
+                  <span class="admin-nav-copy">
+                    <strong>风控策略</strong>
+                    <small>医疗预检、OCR 风险和误判说明。</small>
+                  </span>
+                </button>
+              </div>
+              <div class="admin-nav-group">
+                <p class="admin-nav-group-label">资产</p>
+                <button type="button" class="admin-nav-link" data-admin-section-target="drafts">
+                  <span class="admin-nav-index">04</span>
+                  <span class="admin-nav-copy">
+                    <strong>草稿与资产</strong>
+                    <small>查看历史草稿并跳回生产页继续编辑。</small>
+                  </span>
+                </button>
+              </div>
+            </nav>
+          </aside>
+
+          <section class="admin-content">
+            <section class="admin-section-stack">
+              <section class="admin-section is-active" data-admin-section="overview">
+                <section class="panel admin-panel">
+                  <div class="section-head">
+                    <h2>系统概览</h2>
+                    <p>先确认本地服务、模型供应商和导出环境是否在线。</p>
+                  </div>
+                  <div id="admin-overview-summary" class="admin-overview-summary"></div>
+                  <section class="panel runtime-panel rail-secondary-panel admin-inner-panel">
+                    <div class="section-head section-head-row">
+                      <div>
+                        <h2>运行状态</h2>
+                        <p>模型、模式和依赖状态都放在这里。</p>
+                      </div>
+                      <div id="service-indicator" class="service-indicator service-indicator-pending" aria-live="polite">
+                        <span class="service-indicator-dot"></span>
+                        <span id="service-indicator-text">连接检查中</span>
+                      </div>
+                      <button id="service-retry-btn" type="button" class="switch-btn service-retry-btn hidden">重新连接</button>
+                    </div>
+                    <div id="runtime-status" class="runtime-grid"></div>
+                  </section>
+                </section>
+              </section>
+
+              <section class="admin-section" data-admin-section="models">
+                <section class="panel admin-panel admin-panel-wide">
+                  <div class="section-head">
+                    <h2>模型与供应商</h2>
+                    <p>这里专注管理真正参与生成的供应商：文案、分镜、即梦图片和豆包语音。</p>
+                  </div>
+                  <div id="admin-provider-summary" class="admin-provider-summary"></div>
+                  <section class="panel llm-config-panel rail-secondary-panel admin-inner-panel">
+            <div class="section-head section-head-row">
+              <div>
+                <h2>LLM 配置</h2>
+                <p>每个调用点都单独维护完整配置，互不影响。</p>
+              </div>
+              <div class="control-actions">
+                <button id="llm-config-reload-btn" type="button" class="switch-btn">重新加载</button>
+                <button id="llm-config-save-btn" type="button" class="switch-btn switch-btn-primary">保存配置</button>
+              </div>
+            </div>
+            <p id="llm-config-status" class="status status-idle">等待加载 LLM 配置。</p>
+            <form id="llm-config-form" class="llm-config-form">
+              <details class="llm-config-group" open>
+                <summary>文案生成调用点</summary>
+                <div class="llm-config-toggles">
+                  <label class="style-option checkbox-option"><input id="llm-script-enabled" type="checkbox" /><span>启用该调用点</span></label>
+                  <button type="button" class="switch-btn llm-test-btn" data-llm-test-route="script">测试连接</button>
+                </div>
+                <p id="llm-script-test-status" class="llm-test-status llm-test-status-idle">还没有测试过这个调用点。</p>
+                <div class="llm-config-note">接口地址支持两种写法：完整 URL，或相对路径。只有填相对路径时，才需要再填基础地址。</div>
+                <div class="llm-config-grid">
+                  <label><span>接口类型</span><select id="llm-script-api-kind"><option value="responses">responses</option><option value="chat_completions">chat_completions</option></select></label>
+                  <label><span>模型名</span><input id="llm-script-model" placeholder="gpt-5.2" /></label>
+                  <label class="llm-config-span-2"><span>完整接口地址或相对路径</span><input id="llm-script-endpoint" placeholder="/v1/responses 或完整代理地址" /></label>
+                </div>
+                <details class="llm-config-advanced">
+                  <summary>高级设置</summary>
+                  <div class="llm-config-grid">
+                    <label><span>网关主地址（可选）</span><input id="llm-script-base-url" placeholder="https://your-gateway" /></label>
+                    <label><span>鉴权头</span><input id="llm-script-auth-header" placeholder="Authorization" /></label>
+                    <label><span>鉴权方式</span><select id="llm-script-auth-scheme"><option value="Bearer">Bearer</option><option value="Token">Token</option><option value="">Raw Token</option></select></label>
+                    <label><span>超时（秒）</span><input id="llm-script-timeout-sec" type="number" min="1" step="1" placeholder="20" /></label>
+                    <details class="llm-config-secret llm-config-span-2">
+                      <summary id="llm-script-api-key-status">API Key：未配置</summary>
+                      <label><span>更新 API Key</span><input id="llm-script-api-key" type="password" placeholder="留空表示保持当前值" /></label>
+                    </details>
+                    <label class="llm-config-span-2"><span>协议/提供方</span><input id="llm-script-provider" placeholder="openai-compatible" /></label>
+                  </div>
+                </details>
+              </details>
+
+              <details class="llm-config-group">
+                <summary>分镜生成调用点</summary>
+                <div class="llm-config-toggles">
+                  <label class="style-option checkbox-option"><input id="llm-storyboard-enabled" type="checkbox" /><span>启用该调用点</span></label>
+                  <button type="button" class="switch-btn llm-test-btn" data-llm-test-route="storyboard">测试连接</button>
+                </div>
+                <p id="llm-storyboard-test-status" class="llm-test-status llm-test-status-idle">还没有测试过这个调用点。</p>
+                <div class="llm-config-note">建议和正文调用点分开配置。填完整 URL 时，可以不填基础地址。</div>
+                <div class="llm-config-grid">
+                  <label><span>接口类型</span><select id="llm-storyboard-api-kind"><option value="responses">responses</option><option value="chat_completions">chat_completions</option></select></label>
+                  <label><span>模型名</span><input id="llm-storyboard-model" placeholder="gpt-5.2" /></label>
+                  <label class="llm-config-span-2"><span>完整接口地址或相对路径</span><input id="llm-storyboard-endpoint" placeholder="/v1/responses 或完整代理地址" /></label>
+                </div>
+                <details class="llm-config-advanced">
+                  <summary>高级设置</summary>
+                  <div class="llm-config-grid">
+                    <label><span>网关主地址（可选）</span><input id="llm-storyboard-base-url" placeholder="https://your-gateway" /></label>
+                    <label><span>鉴权头</span><input id="llm-storyboard-auth-header" placeholder="Authorization" /></label>
+                    <label><span>鉴权方式</span><select id="llm-storyboard-auth-scheme"><option value="Bearer">Bearer</option><option value="Token">Token</option><option value="">Raw Token</option></select></label>
+                    <label><span>超时（秒）</span><input id="llm-storyboard-timeout-sec" type="number" min="1" step="1" placeholder="25" /></label>
+                    <details class="llm-config-secret llm-config-span-2">
+                      <summary id="llm-storyboard-api-key-status">API Key：未配置</summary>
+                      <label><span>更新 API Key</span><input id="llm-storyboard-api-key" type="password" placeholder="留空表示保持当前值" /></label>
+                    </details>
+                    <label class="llm-config-span-2"><span>协议/提供方</span><input id="llm-storyboard-provider" placeholder="openai-compatible" /></label>
+                  </div>
+                </details>
+              </details>
+
+              <details class="llm-config-group">
+                <summary>封面生成调用点</summary>
+                <div class="llm-config-toggles">
+                  <label class="style-option checkbox-option"><input id="llm-image-enabled" type="checkbox" /><span>启用该调用点</span></label>
+                  <button type="button" class="switch-btn llm-test-btn" data-llm-test-route="image">测试连接</button>
+                </div>
+                <p id="llm-image-test-status" class="llm-test-status llm-test-status-idle">还没有测试过这个调用点。</p>
+                <div class="llm-config-note">这块按火山引擎即梦 4.0 官方异步接口来配。它负责封面和分镜图片生成：先提交任务，再轮询结果。主表单里先填图片能力标识、尺寸和输出格式；鉴权和轮询参数放在高级设置里。</div>
+                <div class="llm-config-grid">
+                  <input id="llm-image-api-kind" type="hidden" value="native" />
+                  <input id="llm-image-provider" type="hidden" value="volcengine-jimeng-image" />
+                  <input id="llm-image-auth-header" type="hidden" value="Authorization" />
+                  <input id="llm-image-auth-scheme" type="hidden" value="HMAC-SHA256" />
+                  <label><span>图片能力标识（req_key）</span><input id="llm-image-model" placeholder="jimeng_t2i_v40" /></label>
+                  <label><span>质量</span><input id="llm-image-quality" placeholder="high" /></label>
+                  <label><span>尺寸</span><input id="llm-image-size" placeholder="1024x1536" /></label>
+                  <label><span>格式</span><input id="llm-image-format" placeholder="png" /></label>
+                  <label><span>网关主地址</span><input id="llm-image-base-url" placeholder="https://visual.volcengineapi.com" /></label>
+                  <label class="llm-config-span-2"><span>提交接口地址或相对路径</span><input id="llm-image-endpoint" placeholder="/?Action=CVProcess&Version=2022-08-31" /></label>
+                  <label class="llm-config-span-2"><span>查询接口地址或相对路径</span><input id="llm-image-query-endpoint" placeholder="/?Action=CVSync2AsyncGetResult&Version=2022-08-31" /></label>
+                </div>
+                <details class="llm-config-advanced">
+                  <summary>高级设置</summary>
+                  <div class="llm-config-grid">
+                    <label><span>Access Key ID</span><input id="llm-image-api-key" type="password" placeholder="留空表示保持当前值" /></label>
+                    <label><span>Secret Key</span><input id="llm-image-secret-key" type="password" placeholder="留空表示保持当前值" /></label>
+                    <label><span>地域</span><input id="llm-image-region" placeholder="cn-north-1" /></label>
+                    <label><span>服务</span><input id="llm-image-service" placeholder="cv" /></label>
+                    <label><span>轮询间隔（毫秒）</span><input id="llm-image-poll-interval-ms" type="number" min="100" step="100" placeholder="1200" /></label>
+                    <label><span>最大轮询次数</span><input id="llm-image-poll-attempts" type="number" min="1" step="1" placeholder="15" /></label>
+                    <label><span>超时（秒）</span><input id="llm-image-timeout-sec" type="number" min="1" step="1" placeholder="45" /></label>
+                    <p id="llm-image-api-key-status" class="llm-image-credential-status llm-config-span-2">Access Key ID / Secret Key：未配置</p>
+                  </div>
+                </details>
+              </details>
+
+              <details class="llm-config-group">
+                <summary>配音生成调用点</summary>
+                <div class="llm-config-toggles">
+                  <label class="style-option checkbox-option"><input id="llm-tts-enabled" type="checkbox" /><span>启用该调用点</span></label>
+                  <button type="button" class="switch-btn llm-test-btn" data-llm-test-route="tts">测试连接</button>
+                </div>
+                <p id="llm-tts-test-status" class="llm-test-status llm-test-status-idle">还没有测试过这个调用点。</p>
+                <div class="llm-config-note">这块只按火山引擎豆包语音 2.0 来配。主流程里它负责把最终视频文案转成口播音频。当前走官方 V3 单向流式接口，先把 App ID、Access Token、资源 ID 和音色 ID 填好就够了。</div>
+                <div class="llm-config-grid">
+                  <input id="llm-tts-api-kind" type="hidden" value="native" />
+                  <input id="llm-tts-provider" type="hidden" value="volcengine-doubao-tts" />
+                  <input id="llm-tts-auth-header" type="hidden" value="Authorization" />
+                  <input id="llm-tts-auth-scheme" type="hidden" value="Bearer" />
+                  <input id="llm-tts-model" type="hidden" value="seed-tts-2.0" />
+                  <label><span>App ID</span><input id="llm-tts-app-id" placeholder="火山控制台 App ID" /></label>
+                  <label><span>资源 ID</span><input id="llm-tts-resource-id" placeholder="seed-tts-2.0" /></label>
+                  <label><span>音色 ID</span><input id="llm-tts-voice" placeholder="例如：zh_female_cancan_mars_bigtts" /></label>
+                  <label><span>格式</span><input id="llm-tts-format" placeholder="mp3" /></label>
+                  <details class="llm-config-secret llm-config-span-2">
+                    <summary id="llm-tts-api-key-status">Access Token：未配置</summary>
+                    <label><span>更新 Access Token</span><input id="llm-tts-api-key" type="password" placeholder="留空表示保持当前值" /></label>
+                  </details>
+                  <label><span>网关主地址</span><input id="llm-tts-base-url" placeholder="https://openspeech.bytedance.com" /></label>
+                  <label class="llm-config-span-2"><span>完整接口地址或相对路径</span><input id="llm-tts-endpoint" placeholder="/api/v3/tts/unidirectional" /></label>
+                </div>
+                <details class="llm-config-advanced">
+                  <summary>高级设置</summary>
+                  <div class="llm-config-grid">
+                    <label><span>超时（秒）</span><input id="llm-tts-timeout-sec" type="number" min="1" step="1" placeholder="45" /></label>
+                    <div class="llm-config-note llm-config-span-2">默认固定为豆包语音 2.0 原生接法，不需要再手动选择 provider、接口类型或鉴权方式。</div>
+                  </div>
+                </details>
+              </details>
+
+            </form>
+                  </section>
+                </section>
+              </section>
+
+              <section class="admin-section" data-admin-section="risk">
+                <section class="panel admin-panel">
+                  <div class="section-head">
+                    <h2>风控策略</h2>
+                    <p>把医疗 / 广告合规单独抽出来，避免和模型供应商混在一起。</p>
+                  </div>
+                  <section class="panel llm-config-panel rail-secondary-panel admin-inner-panel">
+            <div class="section-head">
+              <h2>火山医疗风控</h2>
+              <p>文案预检、OCR 风险和医学科普误判都从这里维护。</p>
+            </div>
+            <div class="llm-config-toggles">
+              <label class="style-option checkbox-option"><input id="llm-moderation-enabled" type="checkbox" /><span>启用该调用点</span></label>
+              <button type="button" class="switch-btn llm-test-btn" data-llm-test-route="moderation">测试连接</button>
+            </div>
+            <p id="llm-moderation-test-status" class="llm-test-status llm-test-status-idle">还没有测试过这个调用点。</p>
+            <div class="llm-config-note">这块按火山内容风险识别来配，默认面向医疗 / 广告合规。它不是一个“模型”，而是一套风控策略，用来在配音和出图前先做文案预检，并提示 OCR 风险和医学科普误判。</div>
+            <div class="llm-config-grid">
+              <input id="llm-moderation-api-kind" type="hidden" value="native" />
+              <input id="llm-moderation-provider" type="hidden" value="volcengine-medical-risk" />
+              <input id="llm-moderation-auth-header" type="hidden" value="Authorization" />
+              <input id="llm-moderation-auth-scheme" type="hidden" value="HMAC-SHA256" />
+              <input id="llm-moderation-model" type="hidden" value="text_risk" />
+              <label><span>风控服务</span><input id="llm-moderation-service-name" placeholder="text_risk" /></label>
+              <label><span>场景</span><input id="llm-moderation-scene" placeholder="ad_compliance" /></label>
+              <label class="llm-config-span-2"><span>策略 ID（可选）</span><input id="llm-moderation-strategy-id" placeholder="例如：medical_standard" /></label>
+              <label class="llm-config-span-2"><span>文本检测重点</span><input id="llm-moderation-text-checkers" placeholder="medical_fake_ad,drug_forbidden,doctor_qualification" /></label>
+              <label class="llm-config-span-2"><span>图片检测重点</span><input id="llm-moderation-image-checkers" placeholder="uncomfortable,ocr" /></label>
+            </div>
+            <details class="llm-config-advanced">
+              <summary>高级设置</summary>
+              <div class="llm-config-grid">
+                <label><span>网关主地址</span><input id="llm-moderation-base-url" placeholder="https://visual.volcengineapi.com" /></label>
+                <label class="llm-config-span-2"><span>完整接口地址或相对路径</span><input id="llm-moderation-endpoint" placeholder="/?Action=TextRisk&Version=2022-08-31" /></label>
+                <label><span>Access Key ID</span><input id="llm-moderation-api-key" type="password" placeholder="留空表示保持当前值" /></label>
+                <label><span>Secret Key</span><input id="llm-moderation-secret-key" type="password" placeholder="留空表示保持当前值" /></label>
+                <label><span>地域</span><input id="llm-moderation-region" placeholder="cn-north-1" /></label>
+                <label><span>服务</span><input id="llm-moderation-service" placeholder="cv" /></label>
+                <label><span>超时（秒）</span><input id="llm-moderation-timeout-sec" type="number" min="1" step="1" placeholder="15" /></label>
+                <p id="llm-moderation-api-key-status" class="llm-image-credential-status llm-config-span-2">Access Key ID / Secret Key：未配置</p>
+                <div class="llm-config-note llm-config-span-2">如果内容包含手术、病理或创面画面，建议在火山控制台单独配置医学科普白名单或阈值策略，避免被 uncomfortable 误判。</div>
+              </div>
+            </details>
+                  </section>
+                </section>
+              </section>
+
+              <section class="admin-section" data-admin-section="drafts">
+                <section class="panel admin-panel admin-panel-wide">
+                  <div class="section-head">
+                    <h2>草稿与资产</h2>
+                    <p>在后台统一查看草稿状态、导出结果和历史资产，点任意草稿可跳回生产页继续编辑。</p>
+                  </div>
+                  <section class="panel history-panel rail-secondary-panel admin-inner-panel">
+            <div class="section-head section-head-row">
+              <div>
+                <h2>草稿历史</h2>
+                <p>直接打开旧草稿继续调整和导出。</p>
+              </div>
+              <button id="history-toggle-btn" type="button" class="switch-btn history-toggle-btn" aria-expanded="true">收起历史</button>
+            </div>
+            <div id="history-body" class="history-body">
+              <div id="history-summary" class="history-summary history-summary-overview"></div>
+              <details class="history-details" open>
+                <summary>筛选与列表</summary>
+                <div class="history-details-body">
+                  <div class="history-filters">
+                    <input id="history-search" placeholder="搜索主题或标题" />
+                    <select id="history-status-filter">
+                      <option value="all">全部状态</option>
+                      <option value="pending">待处理</option>
+                      <option value="revised">待修改</option>
+                      <option value="ready">可导出</option>
+                      <option value="exported">已导出</option>
+                      <option value="archived">已归档</option>
+                    </select>
+                    <select id="history-sort">
+                      <option value="updated-desc">最近更新</option>
+                      <option value="created-desc">最近创建</option>
+                      <option value="quality-desc">优先处理</option>
+                      <option value="export-desc">导出优先</option>
+                    </select>
+                    <label class="style-option checkbox-option">
+                      <input id="history-starred-filter" type="checkbox" />
+                      <span>只看收藏</span>
+                    </label>
+                  </div>
+                  <div id="history-list" class="history-list"></div>
+                </div>
+              </details>
+            </div>
+                  </section>
+                </section>
+              </section>
+            </section>
+          </section>
+        </section>
+      </main>
+    </div>
+    <script type="module" src="/admin.js?v=20260315-admin-cleanup"></script>
+  </body>
+</html>
