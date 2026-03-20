@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>IVD 视频工作流 Admin</title>
-    <link rel="stylesheet" href="/style.css?v=20260315-admin-cleanup" />
+    <link rel="stylesheet" href="/style.css?v=20260320-admin-nav-fix" />
   </head>
   <body>
     <div class="site-shell">
@@ -92,6 +92,7 @@
                       <button id="service-retry-btn" type="button" class="switch-btn service-retry-btn hidden">重新连接</button>
                     </div>
                     <div id="runtime-status" class="runtime-grid"></div>
+                    <div id="runtime-validation" class="runtime-validation"></div>
                   </section>
                 </section>
               </section>
@@ -100,7 +101,7 @@
                 <section class="panel admin-panel admin-panel-wide">
                   <div class="section-head">
                     <h2>模型与供应商</h2>
-                    <p>这里专注管理真正参与生成的供应商：文案、分镜、即梦图片和豆包语音。</p>
+                    <p>这里专注管理真正参与生成的供应商：文案、分镜、即梦图片、豆包语音和转写校准。</p>
                   </div>
                   <div id="admin-provider-summary" class="admin-provider-summary"></div>
                   <section class="panel llm-config-panel rail-secondary-panel admin-inner-panel">
@@ -115,6 +116,7 @@
               </div>
             </div>
             <p id="llm-config-status" class="status status-idle">等待加载 LLM 配置。</p>
+            <div id="llm-config-validation" class="llm-config-validation"></div>
             <form id="llm-config-form" class="llm-config-form">
               <details class="llm-config-group" open>
                 <summary>文案生成调用点</summary>
@@ -244,6 +246,38 @@
                 </details>
               </details>
 
+              <details class="llm-config-group">
+                <summary>音频转写调用点</summary>
+                <div class="llm-config-toggles">
+                  <label class="style-option checkbox-option"><input id="llm-transcription-enabled" type="checkbox" /><span>启用该调用点</span></label>
+                  <button type="button" class="switch-btn llm-test-btn" data-llm-test-route="transcription">测试连接</button>
+                </div>
+                <p id="llm-transcription-test-status" class="llm-test-status llm-test-status-idle">还没有测试过这个调用点。</p>
+                <div class="llm-config-note">这块按火山引擎大模型录音文件识别来配。主流程里它负责把最终配音再转写成更准的字幕时间。当前先按极速返回的文件识别接口接入，把 App Key、Access Token、资源 ID 和接口地址填好就够了。</div>
+                <div class="llm-config-grid">
+                  <input id="llm-transcription-api-kind" type="hidden" value="native" />
+                  <input id="llm-transcription-provider" type="hidden" value="volcengine-doubao-asr" />
+                  <input id="llm-transcription-auth-header" type="hidden" value="Authorization" />
+                  <input id="llm-transcription-auth-scheme" type="hidden" value="Bearer" />
+                  <input id="llm-transcription-model" type="hidden" value="bigmodel" />
+                  <label><span>App Key</span><input id="llm-transcription-app-id" placeholder="火山应用 App Key" /></label>
+                  <label><span>资源 ID</span><input id="llm-transcription-resource-id" placeholder="volc.bigasr.auc_turbo" /></label>
+                  <label><span>网关主地址</span><input id="llm-transcription-base-url" placeholder="https://openspeech.bytedance.com" /></label>
+                  <label class="llm-config-span-2"><span>完整接口地址或相对路径</span><input id="llm-transcription-endpoint" placeholder="/api/v3/auc/bigmodel/recognize/flash" /></label>
+                  <details class="llm-config-secret llm-config-span-2">
+                    <summary id="llm-transcription-api-key-status">Access Token：未配置</summary>
+                    <label><span>更新 Access Token</span><input id="llm-transcription-api-key" type="password" placeholder="留空表示保持当前值" /></label>
+                  </details>
+                </div>
+                <details class="llm-config-advanced">
+                  <summary>高级设置</summary>
+                  <div class="llm-config-grid">
+                    <label><span>超时（秒）</span><input id="llm-transcription-timeout-sec" type="number" min="1" step="1" placeholder="90" /></label>
+                    <div class="llm-config-note llm-config-span-2">默认固定为火山大模型录音文件识别，不需要再手动选择 provider、接口类型或鉴权方式。</div>
+                  </div>
+                </details>
+              </details>
+
             </form>
                   </section>
                 </section>
@@ -354,6 +388,6 @@
         </section>
       </main>
     </div>
-    <script type="module" src="/admin.js?v=20260315-admin-cleanup"></script>
+    <script type="module" src="/admin.js?v=20260320-admin-nav-fix"></script>
   </body>
 </html>

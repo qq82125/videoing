@@ -1,0 +1,11 @@
+.git
+.github
+.codex
+node_modules
+npm-debug.log*
+docker-compose*.yml
+data
+dist
+coverage
+.DS_Store
+.env.local

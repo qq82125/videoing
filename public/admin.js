@@ -1,6 +1,9 @@
+import { fetchJson, postJson } from "./shared/api-client.js";
+
 const runtimeStatusEl = document.querySelector("#runtime-status");
 const llmConfigForm = document.querySelector("#llm-config-form");
 const llmConfigStatusEl = document.querySelector("#llm-config-status");
+const llmConfigValidationEl = document.querySelector("#llm-config-validation");
 const llmConfigReloadBtn = document.querySelector("#llm-config-reload-btn");
 const llmConfigSaveBtn = document.querySelector("#llm-config-save-btn");
 const serviceIndicatorEl = document.querySelector("#service-indicator");
@@ -21,6 +24,7 @@ const adminSectionTitle = document.querySelector("#admin-section-title");
 const adminSectionDescription = document.querySelector("#admin-section-description");
 const adminOverviewSummary = document.querySelector("#admin-overview-summary");
 const adminProviderSummary = document.querySelector("#admin-provider-summary");
+const runtimeValidationEl = document.querySelector("#runtime-validation");
 const ADMIN_HISTORY_FILTER_STORAGE_KEY = "adminHistoryFilters";
 
 const ADMIN_SECTION_META = {
@@ -30,7 +34,7 @@ const ADMIN_SECTION_META = {
   },
   models: {
     title: "模型与供应商",
-    description: "集中维护文案、分镜、即梦图片和豆包语音，减少在生产页来回切换。",
+    description: "集中维护文案、分镜、即梦图片、豆包语音和转写校准，减少在生产页来回切换。",
   },
   risk: {
     title: "风控策略",
@@ -178,6 +182,7 @@ async function loadRuntimeStatus() {
     runtimeSnapshot = runtime;
     const modeLabel = runtime.mode === "api" ? "API 模式" : "本地兜底模式";
     const readinessLabel = runtime.ffmpegInstalled ? "可直接导出" : "仅可生成脚本";
+    const environmentLabel = runtime.runtimeEnvironment === "docker" ? "Docker 容器" : "本机环境";
     runtimeStatusEl.innerHTML = `
       <article class="runtime-overview-card">
         <div class="runtime-overview-head">
@@ -193,9 +198,14 @@ async function loadRuntimeStatus() {
             <span>导出</span>
             <strong>${readinessLabel}</strong>
           </div>
+          <div class="runtime-overview-pill">
+            <span>运行</span>
+            <strong>${environmentLabel}</strong>
+          </div>
         </div>
       </article>
     `;
+    renderRuntimeValidation(runtime.llmValidation || null);
     setServiceIndicator("online", "本地服务在线");
     renderAdminOverviewSummary();
     renderAdminProviderSummary();
@@ -211,6 +221,7 @@ async function loadRuntimeStatus() {
         <p class="runtime-overview-error">${escapeHtml(error.message || "无法读取运行状态")}</p>
       </article>
     `;
+    renderRuntimeValidation(null);
     renderAdminOverviewSummary();
     renderAdminProviderSummary();
   }
@@ -225,9 +236,11 @@ async function loadLlmConfig() {
     setLlmConfigStatus("正在加载 LLM 配置...", "working");
     const data = await fetchJson("/api/llm-config");
     renderLlmConfig(data.config || {});
+    renderLlmConfigValidation(data.validation || null);
     llmConfigLoaded = true;
     setLlmConfigStatus("LLM 配置已加载。后台页按系统概览、供应商配置和草稿资产来管理。", "success");
   } catch (error) {
+    renderLlmConfigValidation(null);
     setLlmConfigStatus(error.message || "加载 LLM 配置失败", "error");
   }
 }
@@ -266,6 +279,9 @@ function getRuntimeRouteActiveLabel(title, route) {
   }
   if (title === "文案模型" || title === "分镜模型") {
     if (provider === "openai-compatible") return "文本远程生效";
+  }
+  if (title === "转写模型") {
+    if (provider === "volcengine-doubao-asr" || provider === "doubao-asr" || provider.includes("bigasr")) return "火山转写生效";
   }
   if (title === "风控策略" && provider.includes("volcengine")) {
     return "火山风控生效";
@@ -335,6 +351,20 @@ function renderLlmConfig(config) {
   setInputValue("llm-tts-format", config.tts?.format || "mp3");
   setInputValue("llm-tts-endpoint", config.tts?.endpoint || "/api/v3/tts/unidirectional");
 
+  setCheckboxValue("llm-transcription-enabled", config.transcription?.enabled !== false);
+  setInputValue("llm-transcription-provider", config.transcription?.provider || "volcengine-doubao-asr");
+  setInputValue("llm-transcription-base-url", config.transcription?.baseURL || "https://openspeech.bytedance.com");
+  setInputValue("llm-transcription-app-id", config.transcription?.appId || "");
+  setInputValue("llm-transcription-resource-id", config.transcription?.resourceId || "volc.bigasr.auc_turbo");
+  setInputValue("llm-transcription-auth-header", config.transcription?.authHeader || "Authorization");
+  setInputValue("llm-transcription-auth-scheme", config.transcription?.authScheme || "Bearer");
+  setInputValue("llm-transcription-timeout-sec", config.transcription?.timeoutSec || "90");
+  setInputValue("llm-transcription-api-key", config.transcription?.apiKey ? "***" : "");
+  setTextValue("llm-transcription-api-key-status", config.transcription?.apiKey ? "Access Token：已配置" : "Access Token：未配置");
+  setInputValue("llm-transcription-api-kind", config.transcription?.apiKind || "native");
+  setInputValue("llm-transcription-model", config.transcription?.model || "bigmodel");
+  setInputValue("llm-transcription-endpoint", config.transcription?.endpoint || "/api/v3/auc/bigmodel/recognize/flash");
+
   setCheckboxValue("llm-moderation-enabled", config.moderation?.enabled !== false);
   setInputValue("llm-moderation-provider", config.moderation?.provider || "volcengine-medical-risk");
   setInputValue("llm-moderation-base-url", config.moderation?.baseURL || "https://visual.volcengineapi.com");
@@ -386,6 +416,7 @@ async function handleSaveLlmConfig() {
     setLlmConfigStatus("正在保存 LLM 配置...", "working");
     const data = await postJson("/api/llm-config", { config: collectLlmConfig() });
     renderLlmConfig(data.config || {});
+    renderLlmConfigValidation(data.validation || null);
     await loadRuntimeStatus();
     setLlmConfigStatus("LLM 配置已保存。后续生成会按新的调用点配置执行。", "success");
   } catch (error) {
@@ -431,6 +462,7 @@ function buildLlmRouteDebugSummary(routeName) {
 
 function getDefaultRouteTimeoutSec(routeName) {
   if (routeName === "image" || routeName === "tts") return "45";
+  if (routeName === "transcription") return "90";
   if (routeName === "moderation") return "15";
   if (routeName === "storyboard") return "25";
   return "20";
@@ -568,7 +600,7 @@ function renderAdminProviderSummary() {
       <article class="admin-provider-card admin-provider-card-empty">
         <span class="admin-provider-kicker">供应商状态</span>
         <strong>等待运行状态加载</strong>
-        <p>读取运行状态后，这里会显示文本、即梦、豆包和火山风控的生效状态。</p>
+        <p>读取运行状态后，这里会显示文本、即梦、豆包、转写和风控链路的生效状态。</p>
       </article>
     `;
     return;
@@ -585,14 +617,113 @@ function renderAdminProviderSummary() {
     buildProviderSummaryCard("分镜生成", runtimeSnapshot.llm.storyboard, storyboardModelLabel, "分镜"),
     buildProviderSummaryCard("即梦图片", runtimeSnapshot.llm.image, runtimeSnapshot.imageModel || "-", "封面 / 分镜"),
     buildProviderSummaryCard("豆包语音", runtimeSnapshot.llm.tts, runtimeSnapshot.ttsModel || "-", "配音"),
+    buildProviderSummaryCard("字幕校准", runtimeSnapshot.llm.transcription, runtimeSnapshot.llm.transcription?.model || runtimeSnapshot.transcriptionModel || "-", "转写"),
     buildProviderSummaryCard("火山风控", runtimeSnapshot.llm.moderation, runtimeSnapshot.moderationModel || "-", "合规"),
   ].join("");
+}
+
+function renderRuntimeValidation(validation) {
+  if (!runtimeValidationEl) return;
+  runtimeValidationEl.innerHTML = buildValidationPanel("运行态配置体检", "当前按实际生效路由汇总，优先暴露真正会影响生成链路的问题。", validation);
+}
+
+function renderLlmConfigValidation(validation) {
+  if (!llmConfigValidationEl) return;
+  llmConfigValidationEl.innerHTML = buildValidationPanel("配置体检", "保存前后都按启用中的调用点做静态校验，避免字段缺失要等到生成时才暴露。", validation);
+}
+
+function buildValidationPanel(title, description, validation) {
+  if (!validation) {
+    return `
+      <article class="validation-card validation-card-empty">
+        <div class="validation-head">
+          <span class="validation-kicker">${escapeHtml(title)}</span>
+          <span class="validation-badge">等待检查</span>
+        </div>
+        <strong>尚未拿到校验结果</strong>
+        <p class="validation-description">${escapeHtml(description)}</p>
+      </article>
+    `;
+  }
+
+  const issues = Array.isArray(validation.issues) ? validation.issues : [];
+  const tone = validation.healthy ? (validation.warningCount > 0 ? "warning" : "success") : "error";
+  const headline = !issues.length
+    ? "当前配置健康"
+    : validation.healthy
+      ? `当前无阻塞，仍有 ${validation.warningCount} 项提醒`
+      : `当前有 ${validation.issueCount} 项阻塞问题`;
+
+  return `
+    <article class="validation-card validation-card-${tone}">
+      <div class="validation-head">
+        <span class="validation-kicker">${escapeHtml(title)}</span>
+        <span class="validation-badge validation-badge-${tone}">${escapeHtml(getValidationToneLabel(tone))}</span>
+      </div>
+      <strong>${escapeHtml(headline)}</strong>
+      <p class="validation-description">${escapeHtml(description)}</p>
+      <div class="validation-metrics">
+        <div class="validation-pill"><span>阻塞</span><strong>${Number(validation.issueCount) || 0}</strong></div>
+        <div class="validation-pill"><span>提醒</span><strong>${Number(validation.warningCount) || 0}</strong></div>
+        <div class="validation-pill"><span>启用链路</span><strong>${countEnabledValidationRoutes(issues)}</strong></div>
+      </div>
+      ${issues.length ? `<div class="validation-issues">${issues.map((issue) => buildValidationIssueItem(issue)).join("")}</div>` : '<p class="validation-empty">当前没有发现缺字段或明显错配。</p>'}
+    </article>
+  `;
+}
+
+function buildValidationIssueItem(issue) {
+  const tone = issue?.level === "error" ? "error" : "warning";
+  const routeLabel = getValidationRouteLabel(issue?.routeName);
+  const fieldLabel = issue?.field ? ` · ${issue.field}` : "";
+  return `
+    <article class="validation-issue validation-issue-${tone}">
+      <div class="validation-issue-head">
+        <strong>${escapeHtml(routeLabel)}${escapeHtml(fieldLabel)}</strong>
+        <span>${escapeHtml(tone === "error" ? "阻塞" : "提醒")}</span>
+      </div>
+      <p>${escapeHtml(issue?.message || "配置存在待处理项。")}</p>
+    </article>
+  `;
+}
+
+function getValidationToneLabel(tone) {
+  if (tone === "success") return "健康";
+  if (tone === "warning") return "需留意";
+  if (tone === "error") return "待修复";
+  return "等待检查";
+}
+
+function getValidationRouteLabel(routeName) {
+  if (routeName === "script") return "文案模型";
+  if (routeName === "storyboard") return "分镜模型";
+  if (routeName === "image") return "图片模型";
+  if (routeName === "tts") return "配音模型";
+  if (routeName === "transcription") return "转写模型";
+  if (routeName === "moderation") return "风控策略";
+  return "配置项";
+}
+
+function countEnabledValidationRoutes(issues) {
+  const routeNames = new Set((issues || []).map((issue) => String(issue?.routeName || "").trim()).filter(Boolean));
+  return routeNames.size || "已通过";
 }
 
 function buildProviderSummaryCard(title, route, modelLabel, category) {
   const enabled = Boolean(route?.enabled);
   const provider = String(route?.provider || "").trim() || "未配置";
-  const activeLabel = getRuntimeRouteActiveLabel(`${title.includes("风控") ? "风控策略" : title.includes("语音") ? "配音模型" : title.includes("图片") ? "封面模型" : title.includes("分镜") ? "分镜模型" : "文案模型"}`, route) || (enabled ? "远程已启用" : "未启用");
+  const runtimeTitle = title.includes("风控")
+    ? "风控策略"
+    : title.includes("语音")
+      ? "配音模型"
+      : title.includes("图片")
+        ? "封面模型"
+        : title.includes("分镜")
+          ? "分镜模型"
+          : title.includes("字幕") || title.includes("转写")
+            ? "转写模型"
+            : "文案模型";
+  const activeLabel = getRuntimeRouteActiveLabel(runtimeTitle, route) || (enabled ? "远程已启用" : "未启用");
   const endpoint = String(route?.effectiveUrl || route?.endpoint || "-").trim();
   const toneClass = enabled ? "is-online" : "is-idle";
 
@@ -631,6 +762,7 @@ function buildActiveProviderList(runtime) {
     getRuntimeRouteActiveLabel("分镜模型", runtime.llm.storyboard) ? `分镜 ${runtime.storyboardModel || runtime.textModel || "-"}` : "",
     getRuntimeRouteActiveLabel("封面模型", runtime.llm.image) ? "即梦图片" : "",
     getRuntimeRouteActiveLabel("配音模型", runtime.llm.tts) ? "豆包语音" : "",
+    getRuntimeRouteActiveLabel("转写模型", runtime.llm.transcription) ? "字幕校准" : "",
     getRuntimeRouteActiveLabel("风控策略", runtime.llm.moderation) ? "火山风控" : "",
   ].filter(Boolean);
 
@@ -802,6 +934,20 @@ function collectLlmConfig() {
       format: getInputValue("llm-tts-format"),
       endpoint: getInputValue("llm-tts-endpoint"),
     },
+    transcription: {
+      provider: getInputValue("llm-transcription-provider"),
+      baseURL: getInputValue("llm-transcription-base-url"),
+      appId: getInputValue("llm-transcription-app-id"),
+      resourceId: getInputValue("llm-transcription-resource-id"),
+      authHeader: getInputValue("llm-transcription-auth-header"),
+      authScheme: getInputValue("llm-transcription-auth-scheme"),
+      timeoutSec: getInputValue("llm-transcription-timeout-sec"),
+      apiKey: getInputValue("llm-transcription-api-key"),
+      enabled: getCheckboxValue("llm-transcription-enabled"),
+      apiKind: getInputValue("llm-transcription-api-kind"),
+      model: getInputValue("llm-transcription-model"),
+      endpoint: getInputValue("llm-transcription-endpoint"),
+    },
     moderation: {
       provider: getInputValue("llm-moderation-provider"),
       baseURL: getInputValue("llm-moderation-base-url"),
@@ -882,44 +1028,6 @@ function buildHistoryReadiness(draft) {
   if (draft.exportStatus === "script-only") return "可先执行导出脚本";
   if (draft.qualityCheckCount > 0) return "已检查，可继续导出";
   return "建议先运行质检";
-}
-
-async function postJson(url, payload) {
-  try {
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || "请求失败");
-    return data;
-  } catch (error) {
-    throw new Error(normalizeRequestError(error));
-  }
-}
-
-async function fetchJson(url) {
-  try {
-    const response = await fetch(url);
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || "请求失败");
-    return data;
-  } catch (error) {
-    throw new Error(normalizeRequestError(error));
-  }
-}
-
-function normalizeRequestError(error) {
-  const message = String(error?.message || "");
-  const normalized = message.toLowerCase();
-  if (message.includes("Failed to fetch") || normalized.includes("fetch failed")) {
-    return "本地服务未连接，请刷新页面或重启网站。";
-  }
-  if (message.includes("NetworkError")) {
-    return "网络请求失败，请检查本地服务是否正常运行。";
-  }
-  return message || "请求失败";
 }
 
 function debounce(fn, wait) {

@@ -1,3 +1,25 @@
+import { fetchJson, postJson } from "./shared/api-client.js";
+import {
+  buildCoverComposedSvgDocument,
+  escapeXml,
+} from "./shared/cover-layout.js";
+import {
+  buildScriptViewHtml,
+  buildSubtitleViewModel,
+  buildStoryboardViewModel,
+} from "./app/content-panels.js";
+import { buildEditorDirtyState, buildEditorSnapshotPayload, cloneStoryboard } from "./app/editor-state.js";
+import {
+  buildHistoryReadiness as buildHistoryReadinessView,
+  renderHistory as renderHistoryView,
+  renderHistorySummary as renderHistorySummaryView,
+} from "./app/history-panel.js";
+import {
+  renderQualityChecks as renderQualityChecksView,
+  renderQualityOverview as renderQualityOverviewView,
+  renderReleaseControl as renderReleaseControlView,
+} from "./app/quality-panel.js";
+
 const form = document.querySelector("#draft-form");
 const appShellEl = document.querySelector("#app-shell");
 const statusEl = document.querySelector("#status");
@@ -10,9 +32,25 @@ const previewFocusChip = document.querySelector("#preview-focus-chip");
 const previewRecommendTitleEl = document.querySelector("#preview-recommend-title");
 const previewRecommendTextEl = document.querySelector("#preview-recommend-text");
 const coverEl = document.querySelector("#cover-image");
+const coverSafeOverlayEl = document.querySelector("#cover-safe-overlay");
+const coverSafeKickerEl = document.querySelector("#cover-safe-kicker");
+const coverSafeFrameEl = document.querySelector("#cover-safe-frame");
+const coverSafeTitleEl = document.querySelector("#cover-safe-title");
+const coverSafeSubtitleEl = document.querySelector("#cover-safe-subtitle");
+const jumpCoverEditorBtn = document.querySelector("#jump-cover-editor-btn");
+const coverBackgroundHistoryMetaEl = document.querySelector("#cover-background-history-meta");
+const coverBackgroundHistoryGridEl = document.querySelector("#cover-background-history-grid");
+const coverBackgroundCompareEl = document.querySelector("#cover-background-compare");
+const coverBackgroundCompareMetaEl = document.querySelector("#cover-background-compare-meta");
+const coverBackgroundCompareGridEl = document.querySelector("#cover-background-compare-grid");
 const scriptEl = document.querySelector("#script-view");
 const subtitleEl = document.querySelector("#subtitle-view");
 const audioEl = document.querySelector("#audio-player");
+const previewAudioLinkEl = document.querySelector("#preview-audio-link");
+const previewAudioStatusEl = document.querySelector("#preview-audio-status");
+const previewAudioTextEl = document.querySelector("#preview-audio-text");
+const previewAudioMetaEl = document.querySelector("#preview-audio-meta");
+const previewAudioEmptyEl = document.querySelector("#preview-audio-empty");
 const exportBtn = document.querySelector("#export-btn");
 const videoLink = document.querySelector("#video-link");
 const scriptLink = document.querySelector("#script-link");
@@ -50,6 +88,7 @@ const serviceIndicatorTextEl = document.querySelector("#service-indicator-text")
 const serviceRetryBtn = document.querySelector("#service-retry-btn");
 const railDrawerToggleBtn = document.querySelector("#rail-drawer-toggle");
 const railDrawerBackdropEl = document.querySelector("#rail-drawer-backdrop");
+const frontNavLinkEl = document.querySelector("#front-nav-link");
 const previewWorkspaceBtn = document.querySelector("#preview-workspace-btn");
 const randomExampleBtn = document.querySelector("#random-example-btn");
 const clearFormBtn = document.querySelector("#clear-form-btn");
@@ -66,7 +105,22 @@ const coverStyleSelectEl = document.querySelector("#cover-style-select");
 const editTitleAEl = document.querySelector("#edit-title-a");
 const editTitleBEl = document.querySelector("#edit-title-b");
 const editCoverTitleEl = document.querySelector("#edit-cover-title");
+const editCoverVisualPromptEl = document.querySelector("#edit-cover-visual-prompt");
+const editCoverNegativePromptEl = document.querySelector("#edit-cover-negative-prompt");
+const editCoverPositionEl = document.querySelector("#edit-cover-position");
+const editCoverAlignEl = document.querySelector("#edit-cover-align");
+const editCoverSizeEl = document.querySelector("#edit-cover-size");
+const editCoverTitleWidthEl = document.querySelector("#edit-cover-title-width");
+const editCoverTitleOffsetEl = document.querySelector("#edit-cover-title-offset");
+const editCoverTitleXOffsetEl = document.querySelector("#edit-cover-title-x-offset");
+const editCoverTitleSpacingEl = document.querySelector("#edit-cover-title-spacing");
 const editCoverSubtitleEl = document.querySelector("#edit-cover-subtitle");
+const editCoverSubtitlePositionEl = document.querySelector("#edit-cover-subtitle-position");
+const editCoverSubtitleSizeEl = document.querySelector("#edit-cover-subtitle-size");
+const editCoverSubtitleAlignEl = document.querySelector("#edit-cover-subtitle-align");
+const editCoverSubtitleOffsetEl = document.querySelector("#edit-cover-subtitle-offset");
+const editCoverSubtitleXOffsetEl = document.querySelector("#edit-cover-subtitle-x-offset");
+const editCoverSubtitleWidthEl = document.querySelector("#edit-cover-subtitle-width");
 const editHookEl = document.querySelector("#edit-hook");
 const editSection1El = document.querySelector("#edit-section-1");
 const editSection2El = document.querySelector("#edit-section-2");
@@ -88,19 +142,24 @@ const manageRecommendBtn = document.querySelector("#manage-recommend-btn");
 const lightTrialCardEl = document.querySelector("#light-trial-card");
 const partialRebuildCardEl = document.querySelector("#partial-rebuild-card");
 const fullTrialCardEl = document.querySelector("#full-trial-card");
-const lightTrialBtn = document.querySelector("#light-trial-btn");
 const partialAudioBtn = document.querySelector("#partial-audio-btn");
 const partialCoverBtn = document.querySelector("#partial-cover-btn");
+const rerollCoverBackgroundBtn = document.querySelector("#reroll-cover-background-btn");
 const partialSceneBtn = document.querySelector("#partial-scene-btn");
 const fullTrialBtn = document.querySelector("#full-trial-btn");
+const partialAudioStatusEl = document.querySelector("#partial-audio-status");
+const partialCoverStatusEl = document.querySelector("#partial-cover-status");
+const partialSceneStatusEl = document.querySelector("#partial-scene-status");
+const fullTrialStatusEl = document.querySelector("#full-trial-status");
 const partialAudioMetaEl = document.querySelector("#partial-audio-meta");
 const partialCoverMetaEl = document.querySelector("#partial-cover-meta");
 const partialSceneMetaEl = document.querySelector("#partial-scene-meta");
+const productionStartTitleEl = document.querySelector("#production-start-title");
+const productionStartTextEl = document.querySelector("#production-start-text");
+const productionProgressStripEl = document.querySelector("#production-progress-strip");
 const editorAudioBtn = document.querySelector("#editor-audio-btn");
 const editorCoverBtn = document.querySelector("#editor-cover-btn");
-const editorLightTrialBtn = document.querySelector("#editor-light-trial-btn");
 const storyboardPartialBtn = document.querySelector("#storyboard-partial-btn");
-const storyboardFullTrialBtn = document.querySelector("#storyboard-full-trial-btn");
 const editorRecommendTitleEl = document.querySelector("#editor-recommend-title");
 const editorRecommendTextEl = document.querySelector("#editor-recommend-text");
 const storyboardRecommendTitleEl = document.querySelector("#storyboard-recommend-title");
@@ -111,6 +170,11 @@ const releaseControlEl = document.querySelector("#release-control");
 const releaseControlTitleEl = document.querySelector("#release-control-title");
 const releaseControlTextEl = document.querySelector("#release-control-text");
 const releaseControlMetaEl = document.querySelector("#release-control-meta");
+const scriptReviewTitleEl = document.querySelector("#script-review-title");
+const scriptReviewLeadEl = document.querySelector("#script-review-lead");
+const scriptReviewTextEl = document.querySelector("#script-review-text");
+const scriptViewTitleEl = document.querySelector("#script-view-title");
+const subtitleViewTitleEl = document.querySelector("#subtitle-view-title");
 const currentTopicEl = document.querySelector("#current-topic");
 const currentMetaEl = document.querySelector("#current-meta");
 const currentUpdatedEl = document.querySelector("#current-updated");
@@ -133,6 +197,8 @@ const copyScriptBtn = document.querySelector("#copy-script-btn");
 const copySubtitleBtn = document.querySelector("#copy-subtitle-btn");
 const subtitleMetaEl = document.querySelector("#subtitle-meta");
 const storyboardListEl = document.querySelector("#storyboard-list");
+const storyboardSectionEl = document.querySelector("#section-storyboard");
+const finalStepSectionEl = document.querySelector(".workspace-final-step");
 const resumeCard = document.querySelector("#resume-card");
 const resumeCardText = document.querySelector("#resume-card-text");
 const resumeLastDraftBtn = document.querySelector("#resume-last-draft-btn");
@@ -151,21 +217,36 @@ const generateProgressStepsEl = document.querySelector("#generate-progress-steps
 
 const editableFields = [
   editTitleAEl,
-  editTitleBEl,
   editCoverTitleEl,
   editCoverSubtitleEl,
+  editCoverVisualPromptEl,
+  editCoverNegativePromptEl,
+  editCoverPositionEl,
+  editCoverAlignEl,
+  editCoverSizeEl,
+  editCoverTitleWidthEl,
+  editCoverTitleOffsetEl,
+  editCoverTitleXOffsetEl,
+  editCoverTitleSpacingEl,
+  editCoverSubtitlePositionEl,
+  editCoverSubtitleSizeEl,
+  editCoverSubtitleAlignEl,
+  editCoverSubtitleOffsetEl,
+  editCoverSubtitleXOffsetEl,
+  editCoverSubtitleWidthEl,
   editHookEl,
   editSection1El,
   editSection2El,
   editSection3El,
   editCtaEl,
   durationModeEl,
-];
+].filter(Boolean);
 
 let currentDraftId = "";
 let currentCoverStyle = "report";
 let currentTitleVariant = "a";
 let currentDraft = null;
+let coverBackgroundCompareIds = [];
 let currentProductionStage = "script";
 let currentDirtyState = {
   script: false,
@@ -182,6 +263,7 @@ let historyCollapsed = false;
 let lastDraftId = "";
 let currentEditorFocus = "overview";
 let currentPreviewReviewLabel = "整体成片";
+let activeProductionTask = "";
 let runtimeStatusTimer = null;
 let llmConfigLoaded = false;
 let generateProgressTimer = null;
@@ -189,14 +271,112 @@ let generateProgressStartedAt = 0;
 let statusHideTimer = null;
 const PREVIEW_DRAFT_ID = "__preview__";
 const DRAFT_STAGE_STORAGE_KEY = "draftStages";
+const CURRENT_DRAFT_STORAGE_KEY = "currentDraftId";
 
 const GENERATE_PROGRESS_STEPS = [
-  "生成文案",
-  "生成分镜",
-  "生成图片",
-  "生成配音",
-  "整理草稿",
+  "生成脚本",
+  "整理分段",
+  "建立草稿",
 ];
+const PRODUCTION_ACTIONS_STORAGE_KEY = "ivd-production-actions";
+
+const RANDOM_EXAMPLE_PRESETS = [
+  {
+    topic: "集采后 IVD 渠道的下一轮机会在哪里",
+    angle: "从终端实验室价值出发",
+    audience: "",
+    rewriteStyle: "industry_observation",
+  },
+  {
+    topic: "IVD 出海最容易被低估的门槛",
+    angle: "从渠道策略和本地化执行切入",
+    audience: "",
+    rewriteStyle: "deep_analysis",
+  },
+  {
+    topic: "终端实验室为什么重新变重要了",
+    angle: "从服务能力和长期采购逻辑切入",
+    audience: "",
+    rewriteStyle: "point_breakdown",
+  },
+];
+
+function getDraftScriptSource(draft) {
+  const script = draft?.script || {};
+  const draftSections = Array.isArray(draft?.sections)
+    ? draft.sections.map((item) => String(item || "").trim()).filter(Boolean)
+    : [];
+  const scriptSections = Array.isArray(script?.sections)
+    ? script.sections.map((item) => String(item || "").trim()).filter(Boolean)
+    : [];
+  return {
+    title: draft?.title || script.title || "",
+    titleVariants: draft?.titleVariants || script.titleVariants || {},
+    coverTitle: draft?.coverTitle || script.coverTitle || "",
+    coverSubtitle: draft?.coverSubtitle || script.coverSubtitle || "",
+    coverVisualPrompt: draft?.coverVisualPrompt || "",
+    coverNegativePrompt: draft?.coverNegativePrompt || "",
+    coverTitlePosition: draft?.coverTitlePosition || script.coverTitlePosition || "middle",
+    coverTitleAlign: draft?.coverTitleAlign || script.coverTitleAlign || "left",
+    coverTitleSize: draft?.coverTitleSize || script.coverTitleSize || "large",
+    coverTitleWidth: draft?.coverTitleWidth || script.coverTitleWidth || "normal",
+    coverTitleOffset: String(draft?.coverTitleOffset ?? script.coverTitleOffset ?? "0"),
+    coverTitleXOffset: String(draft?.coverTitleXOffset ?? script.coverTitleXOffset ?? "0"),
+    coverTitleSpacing: draft?.coverTitleSpacing || script.coverTitleSpacing || "normal",
+    coverSubtitlePosition: draft?.coverSubtitlePosition || script.coverSubtitlePosition || "below-title",
+    coverSubtitleSize: draft?.coverSubtitleSize || script.coverSubtitleSize || "small",
+    coverSubtitleAlign: draft?.coverSubtitleAlign || script.coverSubtitleAlign || "follow",
+    coverSubtitleOffset: String(draft?.coverSubtitleOffset ?? script.coverSubtitleOffset ?? "0"),
+    coverSubtitleXOffset: String(draft?.coverSubtitleXOffset ?? script.coverSubtitleXOffset ?? "0"),
+    coverSubtitleWidth: draft?.coverSubtitleWidth || script.coverSubtitleWidth || "normal",
+    hook: draft?.hook || script.hook || "",
+    sections: draftSections.length ? draftSections : scriptSections,
+    cta: draft?.cta || script.cta || "",
+    narrationText: draft?.narrationText || script.narrationText || "",
+  };
+}
+
+function splitEstimatedSubtitleText(text) {
+  const normalized = String(text || "").trim();
+  if (!normalized) {
+    return [];
+  }
+
+  return normalized
+    .replace(/([，。！？；：])/g, "$1\n")
+    .split("\n")
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .flatMap((item) => {
+      if (item.length <= 16) {
+        return [item];
+      }
+
+      const parts = [];
+      let cursor = item;
+      while (cursor.length > 16) {
+        parts.push(cursor.slice(0, 16));
+        cursor = cursor.slice(16);
+      }
+      if (cursor) {
+        parts.push(cursor);
+      }
+      return parts;
+    });
+}
+
+function buildEstimatedSubtitleEntries(draft) {
+  const script = getDraftScriptSource(draft);
+  const blocks = [script.hook, ...(script.sections || []), script.cta].filter(Boolean);
+  const parts = blocks.flatMap((block) => splitEstimatedSubtitleText(block));
+  return parts.map((text, index) => ({
+    startSec: null,
+    endSec: null,
+    text,
+    estimated: true,
+    index,
+  }));
+}
 
 boot();
 
@@ -226,7 +406,7 @@ function attachEvents() {
   form.addEventListener("submit", handleGenerate);
   exportBtn.addEventListener("click", handleExport);
   saveDraftBtn.addEventListener("click", handleSaveDraft);
-  checkBtn.addEventListener("click", handleQualityCheck);
+  checkBtn?.addEventListener("click", handleQualityCheck);
   starBtn.addEventListener("click", handleStarToggle);
   workflowStatusSelect.addEventListener("change", handleWorkflowStatusChange);
   markReadyBtn.addEventListener("click", handleMarkReady);
@@ -239,21 +419,29 @@ function attachEvents() {
   workflowPhaseCardEl?.addEventListener("click", handleActiveStageChipClick);
   workflowDirtyChipsEl?.addEventListener("click", handleDirtyChipClick);
   serviceRetryBtn?.addEventListener("click", handleServiceRetry);
-  railDrawerToggleBtn?.addEventListener("click", handleRailDrawerToggle);
   railDrawerBackdropEl?.addEventListener("click", () => setInputDrawerOpen(false));
+  frontNavLinkEl?.addEventListener("click", (event) => {
+    if (window.location.pathname === "/" && appShellEl?.classList.contains("is-production")) {
+      event.preventDefault();
+      try {
+        window.localStorage.removeItem(CURRENT_DRAFT_STORAGE_KEY);
+      } catch {
+        // ignore storage errors
+      }
+      window.location.assign("/?front=1");
+    }
+  });
   previewWorkspaceBtn?.addEventListener("click", handlePreviewWorkspace);
   workflowRecommendBtn?.addEventListener("click", handleRecommendAction);
   manageRecommendBtn?.addEventListener("click", handleRecommendAction);
-  lightTrialBtn?.addEventListener("click", handleLightTrial);
   partialAudioBtn?.addEventListener("click", handlePartialAudioRebuild);
   partialCoverBtn?.addEventListener("click", handlePartialCoverRebuild);
+  rerollCoverBackgroundBtn?.addEventListener("click", handleRerollCoverBackground);
   partialSceneBtn?.addEventListener("click", handlePartialSceneRebuild);
   fullTrialBtn?.addEventListener("click", handleFullTrial);
   editorAudioBtn?.addEventListener("click", handlePartialAudioRebuild);
   editorCoverBtn?.addEventListener("click", handlePartialCoverRebuild);
-  editorLightTrialBtn?.addEventListener("click", handleLightTrial);
   storyboardPartialBtn?.addEventListener("click", handlePartialSceneRebuild);
-  storyboardFullTrialBtn?.addEventListener("click", handleFullTrial);
   confirmScriptBtn?.addEventListener("click", handleConfirmScriptStage);
   llmConfigReloadBtn?.addEventListener("click", handleReloadLlmConfig);
   llmConfigSaveBtn?.addEventListener("click", handleSaveLlmConfig);
@@ -268,11 +456,14 @@ function attachEvents() {
   resumeLastDraftBtn.addEventListener("click", handleResumeLastDraft);
   suggestTopicButtons.forEach((button) => button.addEventListener("click", handleSuggestTopic));
   editableFields.forEach((field) => field.addEventListener("input", handleEditorInput));
+  jumpCoverEditorBtn?.addEventListener("click", handleJumpCoverEditor);
   storyboardListEl?.addEventListener("input", handleStoryboardInput);
   storyboardListEl?.addEventListener("click", handleStoryboardClick);
   bindEditorFocus(editTitleAEl, "title");
   bindEditorFocus(editTitleBEl, "title");
   bindEditorFocus(editCoverTitleEl, "cover");
+  bindEditorFocus(editCoverVisualPromptEl, "cover");
+  bindEditorFocus(editCoverNegativePromptEl, "cover");
   bindEditorFocus(editCoverSubtitleEl, "cover");
   bindEditorFocus(editHookEl, "hook");
   bindEditorFocus(editSection1El, "section-1");
@@ -287,10 +478,16 @@ function attachEvents() {
 
 async function handleGenerate(event) {
   event.preventDefault();
+  if (isPreviewDraft()) {
+    currentDraftId = "";
+    currentDraft = null;
+    persistCurrentDraftId("");
+    syncDraftUrl("");
+  }
   if (!confirmDiscardChanges()) {
     return;
   }
-  setStatus("准备生成草稿...", "working");
+  setStatus("准备生成预制脚本...", "working");
   togglePrimaryActions(true);
   hideExportLinks();
 
@@ -307,14 +504,14 @@ async function handleGenerate(event) {
 
   try {
     startGenerateProgress();
-    setStatus("正在生成文案结构...", "working");
+    setStatus("正在生成口播脚本...", "working");
     const data = await postJson("/api/generate", payload);
     currentDraftId = data.draft.id;
-    setStatus("正在刷新预览和历史...", "working");
-    setGenerateProgressStep(4);
+    setStatus("正在整理脚本分段...", "working");
+    setGenerateProgressStep(2);
     renderDraft(data.draft);
     await loadDraftHistory();
-    setStatus(data.ffmpegInstalled ? "草稿已生成，确认后可直接导出视频。" : "草稿已生成。当前未检测到 ffmpeg，确认后会先生成导出脚本。", "success");
+    setStatus("预制脚本已生成，先确认脚本和分段节奏，再进入后续生产。", "success");
   } catch (error) {
     setStatus(error.message || "生成失败", "error");
   } finally {
@@ -395,28 +592,22 @@ async function handleSaveDraft() {
     setStatus("当前是布局预览模式，不会保存到真实草稿。", "info");
     return;
   }
+  if (!hasUnsavedChanges) {
+    setStatus("当前没有新的修改需要保存。", "info");
+    return;
+  }
 
   togglePrimaryActions(true);
   try {
-    setStatus("正在执行轻量试产：同步文案并重建口播、字幕、封面...", "working");
-    const data = await postJson("/api/drafts/update", {
-      draftId: currentDraftId,
-      content: {
-        title: currentDraft?.title || "",
-        titleVariantA: editTitleAEl.value.trim(),
-        titleVariantB: editTitleBEl.value.trim(),
-        coverTitle: editCoverTitleEl.value.trim(),
-        coverSubtitle: editCoverSubtitleEl.value.trim(),
-        hook: editHookEl.value.trim(),
-        sections: [editSection1El.value.trim(), editSection2El.value.trim(), editSection3El.value.trim()],
-        cta: editCtaEl.value.trim(),
-        durationMode: durationModeEl.value,
-        storyboard: collectStoryboardPayload(),
-      },
-    });
+    setStatus("正在保存本轮文案修订...", "working");
+    const data = await saveDraftEditorContentToServer();
     renderDraft(data.draft);
     await loadDraftHistory();
-    setStatus("轻量试产已完成：文案已同步，口播、字幕和封面已重建。", "success");
+    flushSavedEditorState(data.draft);
+    updateEditorState();
+    renderWorkflowMap(data.draft);
+    renderReleaseControl(data.draft);
+    setStatus("文案修订已保存。需要时再进入生产区按需同步口播、封面或镜头。", "success");
     resultEl.scrollIntoView({ behavior: "smooth", block: "start" });
     pulseResult();
   } catch (error) {
@@ -424,6 +615,90 @@ async function handleSaveDraft() {
   } finally {
     togglePrimaryActions(false);
   }
+}
+
+function buildDraftUpdateContent() {
+  return {
+    title: currentDraft?.title || "",
+    titleVariantA: editTitleAEl.value.trim(),
+    titleVariantB: editTitleBEl?.value?.trim() || editTitleAEl.value.trim(),
+    coverTitle: editCoverTitleEl.value.trim(),
+    coverSubtitle: editCoverSubtitleEl?.value?.trim() || "",
+    coverVisualPrompt: editCoverVisualPromptEl?.value?.trim() || "",
+    coverNegativePrompt: editCoverNegativePromptEl?.value?.trim() || "",
+    coverTitlePosition: editCoverPositionEl?.value || "middle",
+    coverTitleAlign: editCoverAlignEl?.value || "left",
+    coverTitleSize: editCoverSizeEl?.value || "large",
+    coverTitleWidth: editCoverTitleWidthEl?.value || "normal",
+    coverTitleOffset: editCoverTitleOffsetEl?.value || "0",
+    coverTitleXOffset: editCoverTitleXOffsetEl?.value || "0",
+    coverTitleSpacing: editCoverTitleSpacingEl?.value || "normal",
+    coverSubtitlePosition: editCoverSubtitlePositionEl?.value || "below-title",
+    coverSubtitleSize: editCoverSubtitleSizeEl?.value || "small",
+    coverSubtitleAlign: editCoverSubtitleAlignEl?.value || "follow",
+    coverSubtitleOffset: editCoverSubtitleOffsetEl?.value || "0",
+    coverSubtitleXOffset: editCoverSubtitleXOffsetEl?.value || "0",
+    coverSubtitleWidth: editCoverSubtitleWidthEl?.value || "normal",
+    hook: editHookEl.value.trim(),
+    sections: [editSection1El.value.trim(), editSection2El.value.trim(), editSection3El.value.trim()],
+    cta: editCtaEl.value.trim(),
+    durationMode: durationModeEl.value,
+    storyboard: collectStoryboardPayload(),
+  };
+}
+
+async function syncDraftContentToServer() {
+  return postJson("/api/drafts/update", {
+    draftId: currentDraftId,
+    content: buildDraftUpdateContent(),
+  });
+}
+
+async function syncDraftAudioToServer() {
+  return postJson("/api/drafts/sync-audio", {
+    draftId: currentDraftId,
+    content: buildDraftUpdateContent(),
+  });
+}
+
+async function syncDraftCoverToServer() {
+  return postJson("/api/drafts/sync-cover", {
+    draftId: currentDraftId,
+    content: buildDraftUpdateContent(),
+  });
+}
+
+async function rerollCoverBackgroundOnServer() {
+  return postJson("/api/drafts/sync-cover", {
+    draftId: currentDraftId,
+    rerollBackground: true,
+    content: buildDraftUpdateContent(),
+  });
+}
+
+async function selectCoverBackgroundOnServer(backgroundId) {
+  return postJson("/api/drafts/select-cover-background", {
+    draftId: currentDraftId,
+    backgroundId,
+    content: buildDraftUpdateContent(),
+  });
+}
+
+async function toggleCoverBackgroundStarOnServer(backgroundId, starred) {
+  return postJson("/api/drafts/toggle-cover-background-star", {
+    draftId: currentDraftId,
+    backgroundId,
+    starred,
+  });
+}
+
+async function saveDraftEditorContentToServer() {
+  const content = buildDraftUpdateContent();
+  delete content.storyboard;
+  return postJson("/api/drafts/save-content", {
+    draftId: currentDraftId,
+    content,
+  });
 }
 
 async function handleQualityCheck() {
@@ -501,15 +776,21 @@ async function handleMarkReady() {
 }
 
 function renderDraft(draft) {
+  const scriptSource = getDraftScriptSource(draft);
+  const normalizedDurationMode = Number(draft.durationMode || 90);
+  const renderableStoryboard = resolveRenderableStoryboard(draft);
   currentDraft = draft;
   currentDraftId = draft.id;
-  currentProductionStage = draft.productionStage || getStoredDraftStage(currentDraftId) || deriveProductionStage(draft);
+  persistCurrentDraftId(currentDraftId);
+  syncDraftUrl(currentDraftId);
+  applyProductionShell(true);
+  currentProductionStage = draft.productionStage || deriveProductionStage(draft) || getStoredDraftStage(currentDraftId) || "script";
   syncProductionStage();
   currentCoverStyle = draft.coverStyle || "report";
   currentTitleVariant = draft.activeTitleVariant || "a";
-  storyboardDraftState = cloneStoryboard(draft.storyboard || []);
+  storyboardDraftState = renderableStoryboard;
   currentStoryboardIndex = clampStoryboardIndex(currentStoryboardIndex, storyboardDraftState.length);
-  durationModeEl.value = String(draft.durationMode || 90);
+  durationModeEl.value = String(normalizedDurationMode);
   if (coverStyleSelectEl) {
     coverStyleSelectEl.value = draft.coverStyle || "report";
   }
@@ -520,56 +801,221 @@ function renderDraft(draft) {
   currentMetaEl.textContent = [
     draft.sourceType === "article" ? "来自标题 / 正文改写" : "来自主题直生",
     getRewriteStyleLabel(draft.rewriteStyle),
-    `${draft.durationMode || 90} 秒`,
+    `${normalizedDurationMode} 秒`,
     draft.coverStyleLabel || "行业报告风",
     draft.angle || "默认行业视角",
   ].join(" · ");
   currentUpdatedEl.textContent = `最近更新：${formatDateTime(draft.updatedAt || draft.createdAt)}`;
+  activeStageChip.textContent = getProductionStageLabel(currentProductionStage);
+  applyProductionStageTone(activeStageChip, currentProductionStage, "active-chip-stage");
+  activeTitleChip.textContent = `${normalizedDurationMode} 秒`;
+  activeCoverChip.textContent = draft.coverStyleLabel || "行业报告风";
   updateSidebarContext(draft);
-  titleEl.textContent = draft.title;
-  coverStyleEl.textContent = `${draft.coverStyleLabel || "行业报告风"} · ${draft.durationMode || 90} 秒`;
+
+  // Render the script-first areas early so they still show up even if a later
+  // preview or production subsection hits a runtime issue.
+  renderScriptPrep(draft);
+  hydrateScriptEditor(scriptSource);
+  safeRenderRegion("script-view", () => renderScriptView(draft));
+  safeRenderRegion(
+    "subtitle-view",
+    () => renderSubtitleView((draft.subtitleEntries || []).length ? draft.subtitleEntries || [] : currentProductionStage === "script" ? buildEstimatedSubtitleEntries(draft) : []),
+  );
+  syncDraftSnapshot();
+
+  titleEl.textContent = "";
+  coverStyleEl.textContent = `${draft.coverStyleLabel || "行业报告风"} · ${normalizedDurationMode} 秒`;
   previewComboTextEl.textContent = `当前方案：标题 ${String(currentTitleVariant || "a").toUpperCase()} + ${draft.coverStyleLabel || "行业报告风"}`;
   updatePreviewFocusChip();
   const assetVersion = buildAssetVersion(draft);
-  setupPreviewImage(draft, assetVersion);
-  if (draft.assets?.voicePath) {
-    audioEl.src = toVersionedMediaUrl(draft.assets.voicePath, assetVersion);
-  } else {
-    audioEl.removeAttribute("src");
-    audioEl.load();
-  }
-  renderScriptView(draft);
-  renderSubtitleView(draft.subtitleEntries || []);
-  renderStoryboardView(storyboardDraftState, assetVersion);
+  safeRenderRegion("preview-image", () => setupPreviewImage(draft, assetVersion));
+  safeRenderRegion("preview-safe-overlay", () => renderCoverSafeOverlay());
+  safeRenderRegion("cover-background-history", () => renderCoverBackgroundHistory(draft, assetVersion));
+  safeRenderRegion("cover-background-compare", () => renderCoverBackgroundCompare(draft, assetVersion));
+  safeRenderRegion("preview-audio-player", () => syncPreviewAudioPlayer(draft, assetVersion));
+  safeRenderRegion("storyboard-view", () => renderStoryboardView(storyboardDraftState, assetVersion));
 
-  editTitleAEl.value = draft.titleVariants?.a || "";
-  editTitleBEl.value = draft.titleVariants?.b || "";
-  editCoverTitleEl.value = draft.coverTitle || "";
-  editCoverSubtitleEl.value = draft.coverSubtitle || "";
-  editHookEl.value = draft.hook || "";
-  editSection1El.value = draft.sections?.[0] || "";
-  editSection2El.value = draft.sections?.[1] || "";
-  editSection3El.value = draft.sections?.[2] || "";
-  editCtaEl.value = draft.cta || "";
-  syncDraftSnapshot();
-
-  const productionStage = draft.productionStage || deriveProductionStage(draft);
-  activeStageChip.textContent = getProductionStageLabel(productionStage);
-  applyProductionStageTone(activeStageChip, productionStage, "active-chip-stage");
-  activeTitleChip.textContent = `${draft.durationMode || 90} 秒`;
-  activeCoverChip.textContent = draft.coverStyleLabel || "行业报告风";
   workflowStatusSelect.value = draft.workflowStatus || "pending";
   starBtn.textContent = draft.starred ? "取消收藏" : "收藏";
 
-  renderWorkflowMap(draft);
-  renderScriptPrep(draft);
-  renderCombos(draft);
-  renderQualityChecks(draft.qualityChecks || []);
-  renderExportSummary(draft.exportInfo || null);
-  renderReleaseControl(draft);
-  syncExportLinks(draft);
+  safeRenderRegion("workflow-map", () => renderWorkflowMap(draft));
+  safeRenderRegion("production-progress", () => renderProductionProgress(draft));
+  safeRenderRegion("combos", () => renderCombos(draft));
+  safeRenderRegion("quality-checks", () => renderQualityChecks(draft.qualityChecks || []));
+  safeRenderRegion("export-summary", () => renderExportSummary(draft.exportInfo || null));
+  safeRenderRegion("release-control", () => renderReleaseControl(draft));
+  safeRenderRegion("export-links", () => syncExportLinks(draft));
   highlightActiveHistoryItem();
   syncPreviewButton();
+}
+
+function safeRenderRegion(label, renderFn) {
+  try {
+    renderFn();
+  } catch (error) {
+    console.error(`[render:${label}]`, error);
+  }
+}
+
+function hydrateScriptEditor(scriptSource) {
+  if (editTitleAEl) {
+    editTitleAEl.value = scriptSource.titleVariants?.a || scriptSource.title || "";
+  }
+  if (editTitleBEl) {
+    editTitleBEl.value = scriptSource.titleVariants?.b || scriptSource.titleVariants?.a || scriptSource.title || "";
+  }
+  if (editCoverTitleEl) {
+    editCoverTitleEl.value = scriptSource.coverTitle || "";
+  }
+  if (editCoverVisualPromptEl) {
+    editCoverVisualPromptEl.value = scriptSource.coverVisualPrompt || "";
+  }
+  if (editCoverNegativePromptEl) {
+    editCoverNegativePromptEl.value = scriptSource.coverNegativePrompt || "";
+  }
+  if (editCoverSubtitleEl) {
+    editCoverSubtitleEl.value = scriptSource.coverSubtitle || "";
+  }
+  if (editCoverPositionEl) {
+    editCoverPositionEl.value = scriptSource.coverTitlePosition || "middle";
+  }
+  if (editCoverAlignEl) {
+    editCoverAlignEl.value = scriptSource.coverTitleAlign || "left";
+  }
+  if (editCoverSizeEl) {
+    editCoverSizeEl.value = scriptSource.coverTitleSize || "large";
+  }
+  if (editCoverTitleWidthEl) {
+    editCoverTitleWidthEl.value = scriptSource.coverTitleWidth || "normal";
+  }
+  if (editCoverTitleOffsetEl) {
+    editCoverTitleOffsetEl.value = String(scriptSource.coverTitleOffset ?? "0");
+  }
+  if (editCoverTitleXOffsetEl) {
+    editCoverTitleXOffsetEl.value = String(scriptSource.coverTitleXOffset ?? "0");
+  }
+  if (editCoverTitleSpacingEl) {
+    editCoverTitleSpacingEl.value = scriptSource.coverTitleSpacing || "normal";
+  }
+  if (editCoverSubtitlePositionEl) {
+    editCoverSubtitlePositionEl.value = scriptSource.coverSubtitlePosition || "below-title";
+  }
+  if (editCoverSubtitleSizeEl) {
+    editCoverSubtitleSizeEl.value = scriptSource.coverSubtitleSize || "small";
+  }
+  if (editCoverSubtitleAlignEl) {
+    editCoverSubtitleAlignEl.value = scriptSource.coverSubtitleAlign || "follow";
+  }
+  if (editCoverSubtitleOffsetEl) {
+    editCoverSubtitleOffsetEl.value = String(scriptSource.coverSubtitleOffset ?? "0");
+  }
+  if (editCoverSubtitleXOffsetEl) {
+    editCoverSubtitleXOffsetEl.value = String(scriptSource.coverSubtitleXOffset ?? "0");
+  }
+  if (editCoverSubtitleWidthEl) {
+    editCoverSubtitleWidthEl.value = scriptSource.coverSubtitleWidth || "normal";
+  }
+  if (editHookEl) {
+    editHookEl.value = scriptSource.hook || "";
+  }
+  if (editSection1El) {
+    editSection1El.value = scriptSource.sections?.[0] || "";
+  }
+  if (editSection2El) {
+    editSection2El.value = scriptSource.sections?.[1] || "";
+  }
+  if (editSection3El) {
+    editSection3El.value = scriptSource.sections?.[2] || "";
+  }
+  if (editCtaEl) {
+    editCtaEl.value = scriptSource.cta || "";
+  }
+}
+
+function syncPreviewAudioPlayer(draft, assetVersion) {
+  if (!audioEl) {
+    return;
+  }
+
+  const fallbackVoicePath = draft?.id ? `data/drafts/${draft.id}/voice.mp3` : "";
+  const resolvedVoicePath = draft?.assets?.voicePath || ((draft?.subtitleEntries || []).length ? fallbackVoicePath : "");
+
+  if (resolvedVoicePath) {
+    const mediaUrl = toVersionedMediaUrl(resolvedVoicePath, assetVersion);
+    audioEl.src = mediaUrl;
+    audioEl.classList.remove("is-hidden");
+    audioEl.hidden = false;
+    audioEl.removeAttribute("hidden");
+    audioEl.style.display = "block";
+    previewAudioEmptyEl?.classList.add("hidden");
+    if (previewAudioEmptyEl) {
+      previewAudioEmptyEl.hidden = true;
+      previewAudioEmptyEl.setAttribute("hidden", "hidden");
+      previewAudioEmptyEl.style.display = "none";
+    }
+    previewAudioLinkEl?.classList.remove("is-hidden");
+    if (previewAudioLinkEl) {
+      previewAudioLinkEl.href = mediaUrl;
+    }
+    audioEl.load();
+    return;
+  }
+
+  audioEl.removeAttribute("src");
+  audioEl.load();
+  audioEl.classList.add("is-hidden");
+  audioEl.hidden = true;
+  audioEl.setAttribute("hidden", "hidden");
+  audioEl.style.display = "none";
+  previewAudioLinkEl?.classList.add("is-hidden");
+  if (previewAudioLinkEl) {
+    previewAudioLinkEl.removeAttribute("href");
+  }
+  previewAudioEmptyEl?.classList.remove("hidden");
+  if (previewAudioEmptyEl) {
+    previewAudioEmptyEl.hidden = false;
+    previewAudioEmptyEl.removeAttribute("hidden");
+    previewAudioEmptyEl.style.display = "";
+  }
+}
+
+function renderProductionProgress(draft) {
+  if (productionProgressStripEl) {
+    const hasAudioAssets = Boolean(draft?.assets?.voicePath) || Boolean((draft?.subtitleEntries || []).length);
+    const hasCoverAssets = Boolean(draft?.assets?.coverPath) || Boolean(draft?.coverImage);
+    const hasSceneAssets = Boolean((draft?.storyboard || []).some((scene) => scene?.assetPath));
+
+    productionProgressStripEl.querySelectorAll("[data-production-progress]").forEach((node) => {
+      const step = node.dataset.productionProgress;
+      const active =
+        step === "script" ||
+        (step === "audio" && hasAudioAssets) ||
+        (step === "cover" && hasCoverAssets) ||
+        (step === "scene" && hasSceneAssets);
+      node.classList.toggle("is-active", active);
+    });
+  }
+
+  if (scriptReviewTitleEl) {
+    scriptReviewTitleEl.textContent = "当前口播文稿参考";
+  }
+  if (scriptReviewLeadEl) {
+    scriptReviewLeadEl.textContent = currentProductionStage === "script" ? "展开文稿参考" : "展开当前文稿";
+  }
+  if (scriptReviewTextEl) {
+    scriptReviewTextEl.textContent = currentProductionStage === "script"
+      ? "这里只保留当前文稿参考，方便先改表达和节奏；真实口播与字幕结果进入第二步后再统一复核。"
+      : "这里只保留当前文稿参考，方便边改边对照；口播试听、字幕切分和封面结果请回第二步查看。";
+  }
+  if (scriptViewTitleEl) {
+    scriptViewTitleEl.textContent = currentProductionStage === "script" ? "当前脚本文稿" : "当前口播文稿";
+  }
+  if (subtitleViewTitleEl) {
+    subtitleViewTitleEl.textContent = currentProductionStage === "script" ? "预计切分" : "字幕切分";
+  }
+  if (subtitleMetaEl && currentProductionStage === "script" && !(draft?.subtitleEntries || []).length) {
+    subtitleMetaEl.textContent = "脚本期只显示预计切分，尚未生成真实字幕时间轴";
+  }
 }
 
 function renderCombos(draft) {
@@ -736,6 +1182,7 @@ function renderWorkflowControl(recommendation, draft) {
     manageRecommendTextEl.textContent = recommendation.text;
   }
 
+  const isStartActionTarget = ["#partial-audio-btn", "#partial-cover-btn", "#partial-scene-btn", "#full-trial-btn"].includes(recommendation.target || "");
   [workflowRecommendBtn, manageRecommendBtn].forEach((button) => {
     if (!button) {
       return;
@@ -744,6 +1191,9 @@ function renderWorkflowControl(recommendation, draft) {
     button.dataset.recommendAction = recommendation.action;
     button.dataset.recommendTarget = recommendation.target || "";
   });
+  if (manageRecommendBtn) {
+    manageRecommendBtn.classList.toggle("hidden", isStartActionTarget);
+  }
 
   updateTrialActionState(recommendation);
   renderSectionRecommendations(recommendation, draft);
@@ -774,11 +1224,11 @@ function renderSectionRecommendations(recommendation, draft) {
     } else if (hasUnsavedChanges && currentDirtyState.cover && !currentDirtyState.audio && !currentDirtyState.storyboard) {
       editorRecommendTextEl.textContent = "这一轮主要影响封面层。先同步封面，再回看预览里标题和封面是否还在一个方向上。";
     } else if (hasUnsavedChanges && currentDirtyState.audio) {
-      editorRecommendTextEl.textContent = "这一轮改动会影响口播和字幕。先同步音频层，再听节奏和停顿是否顺，再决定要不要继续精修。";
+      editorRecommendTextEl.textContent = "这一轮改动会影响口播和字幕。先同步音频层，并自动校准字幕时间，再听节奏和停顿是否顺。";
     } else if (hasUnsavedChanges && currentDirtyState.script) {
       editorRecommendTextEl.textContent = "这一轮主要是文案层改动。先保存当前草稿，再判断下一步是回听口播还是直接看预览。";
     } else {
-      editorRecommendTextEl.textContent = "当前文案层已经同步。这里更适合复核表达、顺口程度和字幕切分，而不是继续盲改。";
+      editorRecommendTextEl.textContent = "当前文案层已经同步。这里更适合复核表达、顺口程度和字幕时间切分，而不是继续盲改。";
     }
   }
 
@@ -796,19 +1246,19 @@ function renderSectionRecommendations(recommendation, draft) {
 
   if (storyboardRecommendTextEl) {
     if (currentProductionStage === "script") {
-      storyboardRecommendTextEl.textContent = "分镜是后置精修层。先确认脚本，再进入试产，最后才值得花时间做镜头级修改。";
+      storyboardRecommendTextEl.textContent = "分镜是后置精修层。先确认脚本，再进入生产，最后才值得花时间做镜头级修改。";
     } else if (hasUnsavedChanges && currentDirtyState.storyboard) {
       storyboardRecommendTextEl.textContent = "你已经改了镜头内容或节奏。先保存当前分镜，再决定是否重建当前镜头，不要立刻整条重跑。";
     } else if (storyboardDraftState.length) {
-      storyboardRecommendTextEl.textContent = `如果只是 ${sceneLabel} 这一段节奏或素材有问题，优先重建当前镜头；只有整体不顺，才考虑完整试产。`;
+      storyboardRecommendTextEl.textContent = `如果只是 ${sceneLabel} 这一段节奏或素材有问题，优先补当前镜头素材；只有整体不顺，才继续进入逐镜精修和顺序微调。`;
     } else {
-      storyboardRecommendTextEl.textContent = "当前还没有可操作的 scene。先在上游确认脚本和试产方向。";
+      storyboardRecommendTextEl.textContent = "当前还没有可操作的镜头素材。先从上面那一步补当前镜头，再进入这里做逐镜精修。";
     }
   }
 }
 
 function renderPreviewRecommendations(recommendation, draft) {
-  if (!previewRecommendTitleEl || !previewRecommendTextEl || !previewComboTextEl || !previewFocusChip) {
+  if (!previewRecommendTitleEl || !previewRecommendTextEl || !previewComboTextEl) {
     return;
   }
 
@@ -911,66 +1361,23 @@ function renderExportRecommendations(recommendation, draft) {
 }
 
 function renderReleaseControl(draft) {
-  if (!releaseControlEl || !releaseControlTitleEl || !releaseControlTextEl || !releaseControlMetaEl) {
-    return;
-  }
-
-  const checks = draft?.qualityChecks || [];
-  const exportInfo = draft?.exportInfo || {};
-  const hasError = checks.some((item) => item.level === "error");
-  const hasWarning = checks.some((item) => item.level === "warning");
-  const videoReady = Boolean(exportInfo.videoReady);
-
-  let status = "idle";
-  let title = "还不能判断是否可导出";
-  let text = "先跑一次导出前检查，系统才知道当前离成片还差什么。";
-
-  if (currentProductionStage === "script") {
-    title = "还没进入试产导出阶段";
-    text = "当前还在脚本确认阶段。先确认讲什么、怎么讲、讲多久，再回来判断是否能出片。";
-  } else if (hasUnsavedChanges) {
-    status = "warning";
-    title = "先同步当前修改，再做发布判断";
-    text = "你手上这版还没有同步到草稿。先保存或做轻量同步，再决定是否检查、试产或导出。";
-  } else if (!checks.length) {
-    title = "缺少导出判断依据";
-    text = "还没有检查结果。先跑一次导出前检查，确认阻塞项、提醒项和系统状态。";
-  } else if (videoReady) {
-    status = "exported";
-    title = "成片已生成，当前进入发布复核";
-    text = "已经有可用成片。现在更适合从发布视角做整体复核，而不是继续盲目重跑。";
-  } else if (hasError) {
-    status = "blocked";
-    title = "当前还不能导出";
-    text = "检查里还有阻塞项。先处理文案、素材或结构问题，再回来做最终导出判断。";
-  } else if (hasWarning) {
-    status = "warning";
-    title = "可以继续推进，但建议先复核";
-    text = "当前没有硬阻塞，但还有提醒项。建议先做一轮人工复核，再决定是否直接出片。";
-  } else {
-    status = "ready";
-    title = "当前可以进入最终导出";
-    text = draft?.workflowStatus === "ready"
-      ? "系统检查和人工状态都已经比较顺，可以直接进入最终导出。"
-      : "系统检查已经通过。若你也确认没问题，可以先把状态标记为可导出，再执行最终导出。";
-  }
-
-  releaseControlEl.className = `release-control release-control-${status}`;
-  releaseControlTitleEl.textContent = title;
-  releaseControlTextEl.textContent = text;
-
-  const meta = [
-    hasUnsavedChanges ? "当前有未同步修改" : "当前草稿已同步",
-    checks.length ? `检查 ${checks.length} 项` : "尚未检查",
-    draft?.workflowStatusLabel || "待处理",
-    videoReady ? "成片已生成" : "成片未生成",
-  ];
-  releaseControlMetaEl.innerHTML = meta.map((item) => `<span>${item}</span>`).join("");
+  return renderReleaseControlView(draft, {
+    releaseControlEl,
+    releaseControlTitleEl,
+    releaseControlTextEl,
+    releaseControlMetaEl,
+    currentProductionStage,
+    hasUnsavedChanges,
+  });
 }
 
 function getWorkflowRecommendation(draft, state) {
   const checks = draft?.qualityChecks || [];
   const exportInfo = draft?.exportInfo || {};
+  const hasAudioAssets = Boolean(draft?.assets?.voicePath) || Boolean((draft?.subtitleEntries || []).length);
+  const hasCoverAssets = Boolean(draft?.assets?.coverPath) || Boolean(draft?.coverImage);
+  const hasSceneAssets = Boolean((draft?.storyboard || []).length);
+  const hasCoreProductionAssets = hasAudioAssets && hasCoverAssets && hasSceneAssets;
   const coverDirty = currentDirtyState.cover;
   const storyboardDirty = currentDirtyState.storyboard;
   const scriptDirty = currentDirtyState.script;
@@ -1002,8 +1409,8 @@ function getWorkflowRecommendation(draft, state) {
       phaseText: "先确认口播脚本、段落时长和节奏结构。确认之前，不进入正式试产。",
       dirtyChips,
       title: "先确认预制脚本",
-      text: "这一步只处理最便宜的文案层，确认后再进入试产，会明显降低返工成本。",
-      buttonLabel: "确认进入试产",
+      text: "这一步先把脚本和节奏定下来。这里的保存只是保存修订，不会自动开始口播、封面或镜头生产。",
+      buttonLabel: "确认脚本并进入生产",
       action: "click",
       target: "#confirm-script-btn",
       recommendedAction: "light",
@@ -1039,7 +1446,7 @@ function getWorkflowRecommendation(draft, state) {
           ? "当前只有封面层发生变化，建议先同步封面，再决定是否继续做轻量试产。"
         : prioritizeAudio
           ? "当前改动主要影响口播和字幕，建议先同步音频层，再决定要不要继续完整试产。"
-        : "当前有未保存的修改，优先把文案同步，再进入下一轮试产或检查。",
+        : "当前有未保存的修改，先保存这轮文案修订，再决定什么时候开始口播、封面或镜头生产。",
       dirtyChips,
       title: prioritizeStoryboard
         ? "先保存当前分镜修改"
@@ -1054,11 +1461,11 @@ function getWorkflowRecommendation(draft, state) {
         ? "你刚调整了镜头内容或节奏，建议先保存草稿，再执行局部重建。"
         : prioritizeCover
           ? "你刚修改了封面标题或副标题。当前实现会复用轻量同步路径刷新封面，不必先跑完整试产。"
-          : prioritizeAudio
-            ? "你刚改动了正文、CTA 或时长。先同步口播和字幕，再听这一版是否顺，再决定要不要动分镜。"
-            : prioritizeTitle
-              ? "你刚改的是标题层，先同步当前草稿，再回看预览里标题和封面是否匹配。"
-              : "你刚改动了文案，这会影响口播、字幕和后续检查结果，建议先保存同步。",
+        : prioritizeAudio
+          ? "你刚改动了正文、CTA 或时长。先同步口播和字幕，再听这一版是否顺，再决定要不要动分镜。"
+        : prioritizeTitle
+          ? "你刚改的是标题层，先同步当前草稿，再回看预览里标题和封面是否匹配。"
+              : "你刚改动了文案。先把这轮修订存下来，不要急着整包同步，确认后再按需开始生产。",
       buttonLabel: prioritizeCover
         ? "同步封面"
         : prioritizeAudio
@@ -1096,15 +1503,19 @@ function getWorkflowRecommendation(draft, state) {
   if (!state.hasChecks) {
     return {
       phase: "preview",
-      phaseTitle: "试产打磨",
-      phaseText: "先确认当前草稿方向成立，再跑一次导出前检查，看看离成片还差什么。",
+      phaseTitle: hasCoreProductionAssets ? "已完成首轮生产" : "已进入生产",
+      phaseText: hasCoreProductionAssets
+        ? "当前草稿已经有封面、口播、字幕和分镜。下一步更适合先做导出前检查，而不是重新从头开始。"
+        : "现在进入按需生产阶段。先做口播与字幕，再看封面，镜头生产后置。",
       dirtyChips,
-      title: "先做导出前检查",
-      text: "如果当前预览方向没问题，就先跑一次检查，明确阻塞项和下一步动作。",
-      buttonLabel: "导出前检查",
-      action: "click",
-      target: "#check-btn",
-      recommendedAction: "full",
+      title: hasCoreProductionAssets ? "先做导出前检查" : "先开始这一轮生产",
+      text: hasCoreProductionAssets
+        ? "这条草稿的生产资产已经基本齐了。先做一次导出前检查，确认现在离可出片还差什么。"
+        : "如果你刚进入生产阶段，先生成口播与字幕，再决定是否补封面；镜头生产放到后面，准备判断能否出片时再做导出前检查。",
+      buttonLabel: hasCoreProductionAssets ? "导出前检查" : "查看当前预览",
+      action: hasCoreProductionAssets ? "click" : "scroll",
+      target: hasCoreProductionAssets ? "#full-trial-btn" : "#section-preview",
+      recommendedAction: hasCoreProductionAssets ? "full" : "partial",
     };
   }
 
@@ -1154,54 +1565,93 @@ function getWorkflowRecommendation(draft, state) {
 
 function updateTrialActionState(recommendation) {
   const sceneLabel = storyboardDraftState[currentStoryboardIndex]?.sceneTitle || `Scene ${currentStoryboardIndex + 1 || 1}`;
+  const actionState = getProductionActionState(currentDraftId);
   const sceneDisabled = currentProductionStage === "script" || !currentDraftId || !storyboardDraftState.length || isPreviewDraft();
-  const audioDisabled = currentProductionStage === "script" || !currentDraftId || isPreviewDraft() || (!hasUnsavedChanges && !currentDirtyState.audio);
-  const coverDisabled = currentProductionStage === "script" || !currentDraftId || isPreviewDraft() || (!hasUnsavedChanges && !currentDirtyState.cover);
+  const audioNeedsSync = !currentDraft?.assets?.voicePath || !(currentDraft?.subtitleEntries || []).length;
+  const coverNeedsSync = !currentDraft?.assets?.coverPath && !currentDraft?.coverImage;
+  const hasAudioAssets = !audioNeedsSync;
+  const hasCoverAssets = !coverNeedsSync;
+  const hasSceneAssets = Boolean(storyboardDraftState.length) || Boolean((currentDraft?.storyboard || []).some((scene) => scene?.assetPath));
+  const coverHasRun = Boolean(actionState.cover);
+  const sceneHasRun = Boolean(actionState.scene);
+  const hasCoreProductionAssets = hasAudioAssets && hasCoverAssets && hasSceneAssets;
+  const audioDisabled = currentProductionStage === "script" || !currentDraftId || isPreviewDraft();
+  const coverDisabled = currentProductionStage === "script" || !currentDraftId || isPreviewDraft();
 
-  if (lightTrialBtn) {
-    lightTrialBtn.disabled = currentProductionStage === "script" && recommendation?.recommendedAction !== "light";
+  if (productionStartTitleEl) {
+    productionStartTitleEl.textContent = currentProductionStage === "script"
+      ? "脚本确认后再开始生产"
+      : hasCoreProductionAssets
+        ? "当前草稿已具备首轮资产"
+        : hasAudioAssets || hasCoverAssets || hasSceneAssets
+          ? "继续补齐这一轮生产"
+          : "先口播字幕，再封面，镜头后置";
   }
-  if (editorLightTrialBtn) {
-    editorLightTrialBtn.disabled = currentProductionStage === "script" && recommendation?.recommendedAction !== "light";
+
+  if (productionStartTextEl) {
+    productionStartTextEl.textContent = currentProductionStage === "script"
+      ? "先确认脚本，再进入口播、封面、镜头和导出前检查。"
+      : hasCoreProductionAssets
+        ? "现在更建议先做导出前检查；如果这版还不满意，再按需重新同步口播、封面或镜头。"
+          : hasAudioAssets || hasCoverAssets || hasSceneAssets
+            ? "当前已有部分产物。继续补齐剩余部分，或者先做一次导出前检查。"
+            : "先生成口播与字幕，再决定是否补封面，镜头生产后置。";
   }
+
   if (partialAudioBtn) {
     partialAudioBtn.disabled = audioDisabled;
     partialAudioBtn.textContent = currentProductionStage === "script"
-      ? "脚本确认后可同步口播"
+      ? "先确认脚本"
+      : audioNeedsSync
+        ? "开始口播 / 字幕"
       : hasUnsavedChanges && currentDirtyState.audio
         ? "同步口播 / 字幕"
-        : "口播 / 字幕已同步";
+        : "重新同步口播 / 字幕";
   }
   if (editorAudioBtn) {
     editorAudioBtn.disabled = audioDisabled;
     editorAudioBtn.textContent = currentProductionStage === "script"
-      ? "脚本确认后可同步口播"
+      ? "先确认脚本"
+      : audioNeedsSync
+        ? "开始口播 / 字幕"
       : hasUnsavedChanges && currentDirtyState.audio
         ? "同步口播 / 字幕"
-        : "口播 / 字幕已同步";
+        : "重新同步口播 / 字幕";
   }
   if (partialCoverBtn) {
     partialCoverBtn.disabled = coverDisabled;
     partialCoverBtn.textContent = currentProductionStage === "script"
-      ? "脚本确认后可同步封面"
+      ? "脚本确认后再做封面"
+      : !coverHasRun
+        ? "生成封面"
+      : coverNeedsSync
+        ? "生成封面"
       : hasUnsavedChanges && currentDirtyState.cover
-        ? "同步封面"
-        : "封面已同步";
+        ? "仅更新叠字，不重抽背景"
+        : "重新同步封面";
   }
   if (editorCoverBtn) {
     editorCoverBtn.disabled = coverDisabled;
     editorCoverBtn.textContent = currentProductionStage === "script"
-      ? "脚本确认后可同步封面"
+      ? "脚本确认后再做封面"
+      : !coverHasRun
+        ? "生成封面"
+      : coverNeedsSync
+        ? "生成封面"
       : hasUnsavedChanges && currentDirtyState.cover
-        ? "同步封面"
-        : "封面已同步";
+        ? "仅更新叠字，不重抽背景"
+        : "重新同步封面";
+  }
+  if (rerollCoverBackgroundBtn) {
+    rerollCoverBackgroundBtn.disabled = coverDisabled;
+    rerollCoverBackgroundBtn.textContent = currentProductionStage === "script" ? "脚本确认后可重抽背景" : "只重抽背景";
   }
   if (partialSceneBtn) {
     partialSceneBtn.disabled = sceneDisabled;
     partialSceneBtn.textContent = currentProductionStage === "script"
       ? "脚本确认后可同步镜头"
       : storyboardDraftState.length
-        ? `同步当前镜头：${sceneLabel}`
+        ? `补当前镜头并继续：${sceneLabel}`
         : "当前无可同步镜头";
   }
   if (storyboardPartialBtn) {
@@ -1209,48 +1659,155 @@ function updateTrialActionState(recommendation) {
     storyboardPartialBtn.textContent = currentProductionStage === "script"
       ? "脚本确认后可同步镜头"
       : storyboardDraftState.length
-        ? `同步当前镜头：${sceneLabel}`
+        ? `补当前镜头并继续：${sceneLabel}`
         : "当前无可同步镜头";
   }
   if (fullTrialBtn) {
     fullTrialBtn.disabled = currentProductionStage === "script";
-  }
-  if (storyboardFullTrialBtn) {
-    storyboardFullTrialBtn.disabled = currentProductionStage === "script";
+    fullTrialBtn.textContent = hasCoreProductionAssets ? "先做导出前检查" : "导出前检查";
   }
 
   if (partialAudioMetaEl) {
-    partialAudioMetaEl.textContent = hasUnsavedChanges && currentDirtyState.audio
-      ? "口播层：检测到正文或时长变动，适合先同步口播和字幕"
-      : "口播层：当前没有待同步的正文或时长改动";
-    partialAudioMetaEl.classList.toggle("is-dirty", hasUnsavedChanges && currentDirtyState.audio);
-    partialAudioMetaEl.classList.toggle("is-clean", !(hasUnsavedChanges && currentDirtyState.audio));
+    partialAudioMetaEl.textContent = currentProductionStage === "script"
+      ? "这一步现在还没解锁。先确认脚本，进入生产后再从这里生成真实口播与字幕。"
+      : audioNeedsSync
+        ? "还没有口播和字幕。从这里开始第一轮生成，并自动校准字幕时间"
+        : hasUnsavedChanges && currentDirtyState.audio
+          ? "正文或时长变了，先重生成口播和字幕，再听这一版是否顺"
+          : "当前已生成口播和字幕，如需重做这一轮听感，可从这里重新同步并校准时间";
+    partialAudioMetaEl.classList.toggle("is-dirty", audioNeedsSync || (hasUnsavedChanges && currentDirtyState.audio));
+    partialAudioMetaEl.classList.toggle("is-clean", !(audioNeedsSync || (hasUnsavedChanges && currentDirtyState.audio)));
+  }
+  if (partialAudioStatusEl) {
+    partialAudioStatusEl.textContent = currentProductionStage === "script"
+      ? "当前状态：脚本确认后解锁"
+      : activeProductionTask === "audio"
+        ? "当前状态：生成中"
+        : hasAudioAssets
+          ? (hasUnsavedChanges && currentDirtyState.audio ? "当前状态：待更新" : "当前状态：已完成")
+          : "当前状态：未开始";
+    partialAudioStatusEl.classList.toggle("is-active", activeProductionTask === "audio");
+    partialAudioStatusEl.classList.toggle("is-ready", hasAudioAssets && !(hasUnsavedChanges && currentDirtyState.audio));
+  }
+  if (previewAudioStatusEl) {
+    previewAudioStatusEl.textContent = currentProductionStage === "script"
+      ? "当前状态：仅脚本预演"
+      : activeProductionTask === "audio"
+        ? "当前状态：生成中"
+        : hasAudioAssets
+          ? (hasUnsavedChanges && currentDirtyState.audio ? "当前状态：待更新" : "当前状态：已完成")
+          : "当前状态：未开始";
+    previewAudioStatusEl.classList.toggle("is-active", activeProductionTask === "audio");
+    previewAudioStatusEl.classList.toggle("is-ready", hasAudioAssets && !(hasUnsavedChanges && currentDirtyState.audio));
+  }
+  if (previewAudioTextEl) {
+    previewAudioTextEl.textContent = currentProductionStage === "script"
+      ? "当前这里只展示口播稿预演和预计切分，不会自动生成真实音频。"
+      : activeProductionTask === "audio"
+        ? "正在生成口播并校准字幕时间，完成后这里会直接出现可播放音频和新的字幕切分。"
+        : hasAudioAssets
+          ? (hasUnsavedChanges && currentDirtyState.audio
+            ? "当前已有上一版口播与字幕结果，但这轮文案修改后需要重新同步。"
+            : "口播和字幕结果已生成。先听口播，再看字幕切分是否顺。")
+          : "还没有口播与字幕结果。先从左侧第一步开始生成，完成后就在这里复核。";
+  }
+  if (previewAudioMetaEl) {
+    previewAudioMetaEl.textContent = currentProductionStage === "script"
+      ? "确认脚本并进入生产后，真实口播会生成在这里，播放器也会在这里直接试听。"
+      : activeProductionTask === "audio"
+        ? "这一轮口播 / 字幕正在生成，完成后会自动刷新这里的播放器和切分列表。"
+        : hasAudioAssets
+          ? (hasUnsavedChanges && currentDirtyState.audio
+            ? "当前显示的是上一版结果，等待这轮文案重新同步。"
+            : `最近结果更新时间：${formatDateTime(currentDraft?.updatedAt || currentDraft?.createdAt)}`)
+          : "还没有口播与字幕结果。";
   }
   if (partialCoverMetaEl) {
-    partialCoverMetaEl.textContent = hasUnsavedChanges && currentDirtyState.cover
-      ? "封面层：检测到封面标题或副标题修改，适合先同步封面"
-      : "封面层：当前没有待同步的封面修改";
-    partialCoverMetaEl.classList.toggle("is-dirty", hasUnsavedChanges && currentDirtyState.cover);
-    partialCoverMetaEl.classList.toggle("is-clean", !(hasUnsavedChanges && currentDirtyState.cover));
+    partialCoverMetaEl.textContent = !coverHasRun
+      ? "这一步你还没执行。即使系统已有默认封面，也建议在这里手动确认并生成一次正式封面。"
+      : coverNeedsSync
+      ? "当前还没有封面。建议在口播方向成立后，再从这里开始第一轮生成"
+      : hasUnsavedChanges && currentDirtyState.cover
+      ? "封面标题或布局变了，先单独同步封面，不必动口播和镜头"
+      : "当前已生成封面，如需重做首屏效果，可从这里重新同步";
+    partialCoverMetaEl.classList.toggle("is-dirty", coverNeedsSync || (hasUnsavedChanges && currentDirtyState.cover));
+    partialCoverMetaEl.classList.toggle("is-clean", !(coverNeedsSync || (hasUnsavedChanges && currentDirtyState.cover)));
+  }
+  if (partialCoverStatusEl) {
+    partialCoverStatusEl.textContent = currentProductionStage === "script"
+      ? "当前状态：等待脚本确认"
+      : activeProductionTask === "cover"
+        ? "当前状态：生成中"
+        : !coverHasRun
+          ? "当前状态：未开始"
+        : hasCoverAssets
+          ? (hasUnsavedChanges && currentDirtyState.cover ? "当前状态：待更新" : "当前状态：已完成")
+          : "当前状态：未开始";
+    partialCoverStatusEl.classList.toggle("is-active", activeProductionTask === "cover");
+    partialCoverStatusEl.classList.toggle("is-ready", hasCoverAssets && !(hasUnsavedChanges && currentDirtyState.cover));
   }
   if (partialSceneMetaEl) {
     partialSceneMetaEl.textContent = currentProductionStage === "script"
       ? "镜头层：脚本确认后再进入 scene 级同步"
+      : !sceneHasRun
+        ? "这一步你还没执行。默认镜头草案不算正式镜头生产，建议在前两步稳定后再手动开始。"
       : storyboardDraftState.length
-        ? `镜头层：当前可对 ${sceneLabel} 做局部同步`
+        ? `镜头层：建议在口播和封面稳定后，再对 ${sceneLabel} 做局部同步`
         : "镜头层：当前没有可同步的 scene";
     partialSceneMetaEl.classList.toggle("is-dirty", !sceneDisabled && Boolean(storyboardDraftState.length));
     partialSceneMetaEl.classList.toggle("is-clean", sceneDisabled || !storyboardDraftState.length);
   }
+  if (partialSceneStatusEl) {
+    partialSceneStatusEl.textContent = currentProductionStage === "script"
+      ? "当前状态：等待脚本确认"
+      : activeProductionTask === "scene"
+        ? "当前状态：生成中"
+        : !sceneHasRun
+          ? "当前状态：未开始"
+        : hasSceneAssets
+          ? "当前状态：可同步 / 已有镜头"
+          : "当前状态：后置未开始";
+    partialSceneStatusEl.classList.toggle("is-active", activeProductionTask === "scene");
+    partialSceneStatusEl.classList.toggle("is-ready", hasSceneAssets && currentProductionStage !== "script");
+  }
+  if (fullTrialStatusEl) {
+    const hasChecks = Boolean((currentDraft?.qualityChecks || []).length);
+    fullTrialStatusEl.textContent = currentProductionStage === "script"
+      ? "当前状态：等待脚本确认"
+      : activeProductionTask === "check"
+        ? "当前状态：检查中"
+        : hasChecks
+          ? "当前状态：已有检查结论"
+          : "当前状态：未开始";
+    fullTrialStatusEl.classList.toggle("is-active", activeProductionTask === "check");
+    fullTrialStatusEl.classList.toggle("is-ready", hasChecks);
+  }
+
+  partialAudioBtn?.closest(".trial-action-card")?.classList.toggle("is-ready", hasAudioAssets && !(hasUnsavedChanges && currentDirtyState.audio));
+  partialCoverBtn?.closest(".trial-action-card")?.classList.toggle("is-ready", coverHasRun && hasCoverAssets && !(hasUnsavedChanges && currentDirtyState.cover));
 
   [
-    [lightTrialCardEl, recommendation?.recommendedAction === "light", false],
-    [partialRebuildCardEl, recommendation?.recommendedAction === "partial", sceneDisabled && audioDisabled && coverDisabled],
-    [fullTrialCardEl, recommendation?.recommendedAction === "full", currentProductionStage === "script"],
+    [partialAudioBtn?.closest(".trial-action-card"), false, audioDisabled],
+    [partialCoverBtn?.closest(".trial-action-card"), false, coverDisabled],
+    [partialRebuildCardEl, recommendation?.recommendedAction === "partial", sceneDisabled],
+    [fullTrialCardEl, recommendation?.recommendedAction === "full" || hasCoreProductionAssets, currentProductionStage === "script"],
   ].forEach(([card, isRecommended, isDisabled]) => {
     card?.classList.toggle("is-recommended", Boolean(isRecommended));
     card?.classList.toggle("is-disabled", Boolean(isDisabled));
   });
+
+  // Re-apply the preview player and release summary on the stable state-update
+  // path so these regions do not stay stuck on their HTML defaults even if an
+  // earlier render step was skipped or failed.
+  if (currentDraft) {
+    const assetVersion = buildAssetVersion(currentDraft);
+    setupPreviewImage(currentDraft, assetVersion);
+    renderCoverSafeOverlay();
+    renderCoverBackgroundHistory(currentDraft, assetVersion);
+    renderCoverBackgroundCompare(currentDraft, assetVersion);
+    syncPreviewAudioPlayer(currentDraft, assetVersion);
+    renderReleaseControl(currentDraft);
+  }
 }
 
 function handleRecommendAction(event) {
@@ -1271,30 +1828,12 @@ function handleRecommendAction(event) {
 }
 
 async function handleLightTrial() {
-  if (currentProductionStage === "script") {
-    setStatus("请先确认预制脚本，再进入试产。", "info");
-    document.querySelector("#section-prep")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    return;
-  }
-
-  if (hasUnsavedChanges) {
-    await handleSaveDraft();
-    if (currentDraft) {
-      renderWorkflowMap(currentDraft);
-    }
-    return;
-  }
-
-  setStatus("当前文案已同步，可以直接继续看预览或进入完整试产。", "success");
-  if (currentDraft) {
-    renderWorkflowMap(currentDraft);
-  }
   document.querySelector("#section-preview")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 async function handlePartialAudioRebuild() {
   if (currentProductionStage === "script") {
-    setStatus("脚本阶段先确认文案结构，还不建议进入口播同步。", "info");
+    setStatus("当前还是脚本期。先点“确认脚本并进入生产”，之后第一步才会生成真实口播与字幕。", "info");
     document.querySelector("#section-prep")?.scrollIntoView({ behavior: "smooth", block: "start" });
     return;
   }
@@ -1309,20 +1848,54 @@ async function handlePartialAudioRebuild() {
     return;
   }
 
-  if (!(hasUnsavedChanges && currentDirtyState.audio)) {
-    setStatus("当前口播和字幕已经是最新，无需单独重建。", "info");
-    return;
-  }
-
+  const needsFirstAudioBuild = !currentDraft?.assets?.voicePath || !(currentDraft?.subtitleEntries || []).length;
   partialAudioBtn && (partialAudioBtn.disabled = true);
   editorAudioBtn && (editorAudioBtn.disabled = true);
   try {
-    await handleSaveDraft();
-    setStatus("口播 / 字幕已通过轻量同步更新。当前实现会连带刷新封面，但不会重建分镜。", "success");
-    document.querySelector("#section-preview")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    activeProductionTask = "audio";
+    updateTrialActionState(getWorkflowRecommendation(currentDraft, {
+      hasUnsaved: hasUnsavedChanges,
+      hasChecks: Boolean((currentDraft?.qualityChecks || []).length),
+      hasBlockingCheck: (currentDraft?.qualityChecks || []).some((item) => item.level === "error"),
+      exportReady: Boolean((currentDraft?.qualityChecks || []).length) && !(currentDraft?.qualityChecks || []).some((item) => item.level === "error"),
+      videoReady: Boolean(currentDraft?.exportInfo?.videoReady),
+      stage: currentProductionStage,
+    }));
+    setStatus(
+      needsFirstAudioBuild
+        ? "正在开始生成口播、字幕并校准时间..."
+        : hasUnsavedChanges && currentDirtyState.audio
+          ? "正在同步最新口播、字幕并校准时间..."
+          : "正在重新同步这一轮口播、字幕并校准时间...",
+      "working",
+    );
+    const data = await syncDraftAudioToServer();
+    const latestData = await fetchJson(`/api/drafts/${currentDraftId}`);
+    markProductionAction(currentDraftId, "audio");
+    renderDraft(latestData.draft || data.draft);
+    await loadDraftHistory();
+    flushSavedEditorState(latestData.draft || data.draft);
+    renderWorkflowMap(latestData.draft || data.draft);
+    renderReleaseControl(latestData.draft || data.draft);
+    setStatus(
+      needsFirstAudioBuild
+        ? "口播 / 字幕已开始生成，并已进入字幕时间校准。"
+        : "口播 / 字幕已同步更新，并已重新校准字幕时间。当前不会顺手重刷封面或分镜。",
+      "success",
+    );
+    document.querySelector("#preview-review-workbench")?.scrollIntoView({ behavior: "smooth", block: "start" });
   } finally {
+    activeProductionTask = "";
     if (currentDraft) {
       renderWorkflowMap(currentDraft);
+      updateTrialActionState(getWorkflowRecommendation(currentDraft, {
+        hasUnsaved: hasUnsavedChanges,
+        hasChecks: Boolean((currentDraft?.qualityChecks || []).length),
+        hasBlockingCheck: (currentDraft?.qualityChecks || []).some((item) => item.level === "error"),
+        exportReady: Boolean((currentDraft?.qualityChecks || []).length) && !(currentDraft?.qualityChecks || []).some((item) => item.level === "error"),
+        videoReady: Boolean(currentDraft?.exportInfo?.videoReady),
+        stage: currentProductionStage,
+      }));
     }
   }
 }
@@ -1344,22 +1917,166 @@ async function handlePartialCoverRebuild() {
     return;
   }
 
-  if (!(hasUnsavedChanges && currentDirtyState.cover)) {
-    setStatus("当前封面已经是最新，无需单独重建。", "info");
-    return;
-  }
-
+  const needsFirstCoverBuild = !currentDraft?.assets?.coverPath && !currentDraft?.coverImage;
   partialCoverBtn && (partialCoverBtn.disabled = true);
   editorCoverBtn && (editorCoverBtn.disabled = true);
   try {
-    await handleSaveDraft();
-    setStatus("封面已通过轻量同步更新。当前实现会复用同一条同步路径，同时刷新关联口播和字幕。", "success");
+    activeProductionTask = "cover";
+    updateTrialActionState(getWorkflowRecommendation(currentDraft, {
+      hasUnsaved: hasUnsavedChanges,
+      hasChecks: Boolean((currentDraft?.qualityChecks || []).length),
+      hasBlockingCheck: (currentDraft?.qualityChecks || []).some((item) => item.level === "error"),
+      exportReady: Boolean((currentDraft?.qualityChecks || []).length) && !(currentDraft?.qualityChecks || []).some((item) => item.level === "error"),
+      videoReady: Boolean(currentDraft?.exportInfo?.videoReady),
+      stage: currentProductionStage,
+    }));
+    setStatus(
+      needsFirstCoverBuild
+        ? "正在开始生成封面..."
+        : hasUnsavedChanges && currentDirtyState.cover
+          ? "正在用当前背景重合成封面叠字，不会重抽背景..."
+          : "正在重新同步当前封面...",
+      "working",
+    );
+    const data = await syncDraftCoverToServer();
+    markProductionAction(currentDraftId, "cover");
+    renderDraft(data.draft);
+    await loadDraftHistory();
+    flushSavedEditorState(data.draft);
+    renderWorkflowMap(data.draft);
+    renderReleaseControl(data.draft);
+    setStatus(
+      needsFirstCoverBuild
+        ? "封面已开始生成并同步到当前草稿。"
+        : hasUnsavedChanges && currentDirtyState.cover
+          ? "封面叠字已更新，当前背景未重抽。"
+          : "封面已同步更新。当前不会顺手重刷口播、字幕或分镜。",
+      "success",
+    );
     document.querySelector("#section-preview")?.scrollIntoView({ behavior: "smooth", block: "start" });
   } finally {
+    activeProductionTask = "";
     if (currentDraft) {
       renderWorkflowMap(currentDraft);
+      updateTrialActionState(getWorkflowRecommendation(currentDraft, {
+        hasUnsaved: hasUnsavedChanges,
+        hasChecks: Boolean((currentDraft?.qualityChecks || []).length),
+        hasBlockingCheck: (currentDraft?.qualityChecks || []).some((item) => item.level === "error"),
+        exportReady: Boolean((currentDraft?.qualityChecks || []).length) && !(currentDraft?.qualityChecks || []).some((item) => item.level === "error"),
+        videoReady: Boolean(currentDraft?.exportInfo?.videoReady),
+        stage: currentProductionStage,
+      }));
     }
   }
+}
+
+async function handleRerollCoverBackground() {
+  if (currentProductionStage === "script") {
+    setStatus("脚本阶段先确认文案结构，还不建议进入封面背景重抽。", "info");
+    return;
+  }
+
+  if (isPreviewDraft()) {
+    setStatus("预览模式下不执行真实封面背景重抽。", "info");
+    return;
+  }
+
+  if (!currentDraftId) {
+    setStatus("请先生成或打开一个草稿。", "error");
+    return;
+  }
+
+  rerollCoverBackgroundBtn && (rerollCoverBackgroundBtn.disabled = true);
+  partialCoverBtn && (partialCoverBtn.disabled = true);
+  editorCoverBtn && (editorCoverBtn.disabled = true);
+
+  try {
+    activeProductionTask = "cover";
+    updateTrialActionState(getWorkflowRecommendation(currentDraft, {
+      hasUnsaved: hasUnsavedChanges,
+      hasChecks: Boolean((currentDraft?.qualityChecks || []).length),
+      hasBlockingCheck: (currentDraft?.qualityChecks || []).some((item) => item.level === "error"),
+      exportReady: Boolean((currentDraft?.qualityChecks || []).length) && !(currentDraft?.qualityChecks || []).some((item) => item.level === "error"),
+      videoReady: Boolean(currentDraft?.exportInfo?.videoReady),
+      stage: currentProductionStage,
+    }));
+    setStatus("正在只重抽封面背景，当前标题排版会按编辑器设置重新硬叠。", "working");
+    const data = await rerollCoverBackgroundOnServer();
+    markProductionAction(currentDraftId, "cover");
+    renderDraft(data.draft);
+    await loadDraftHistory();
+    flushSavedEditorState(data.draft);
+    renderWorkflowMap(data.draft);
+    renderReleaseControl(data.draft);
+    setStatus("封面背景已重抽，并按当前标题设置重新合成正式封面。", "success");
+  } finally {
+    activeProductionTask = "";
+    rerollCoverBackgroundBtn && (rerollCoverBackgroundBtn.disabled = false);
+    if (currentDraft) {
+      renderWorkflowMap(currentDraft);
+      updateTrialActionState(getWorkflowRecommendation(currentDraft, {
+        hasUnsaved: hasUnsavedChanges,
+        hasChecks: Boolean((currentDraft?.qualityChecks || []).length),
+        hasBlockingCheck: (currentDraft?.qualityChecks || []).some((item) => item.level === "error"),
+        exportReady: Boolean((currentDraft?.qualityChecks || []).length) && !(currentDraft?.qualityChecks || []).some((item) => item.level === "error"),
+        videoReady: Boolean(currentDraft?.exportInfo?.videoReady),
+        stage: currentProductionStage,
+      }));
+    }
+  }
+}
+
+async function handleSelectCoverBackground(backgroundId) {
+  if (!backgroundId || !currentDraftId || isPreviewDraft()) {
+    return;
+  }
+
+  try {
+    activeProductionTask = "cover";
+    updateTrialActionState(getWorkflowRecommendation(currentDraft, {
+      hasUnsaved: hasUnsavedChanges,
+      hasChecks: Boolean((currentDraft?.qualityChecks || []).length),
+      hasBlockingCheck: (currentDraft?.qualityChecks || []).some((item) => item.level === "error"),
+      exportReady: Boolean((currentDraft?.qualityChecks || []).length) && !(currentDraft?.qualityChecks || []).some((item) => item.level === "error"),
+      videoReady: Boolean(currentDraft?.exportInfo?.videoReady),
+      stage: currentProductionStage,
+    }));
+    setStatus("正在切换背景底图，并重新套用当前标题排版...", "working");
+    const data = await selectCoverBackgroundOnServer(backgroundId);
+    renderDraft(data.draft);
+    await loadDraftHistory();
+    flushSavedEditorState(data.draft);
+    renderWorkflowMap(data.draft);
+    renderReleaseControl(data.draft);
+    setStatus("已切换背景底图，并重新合成当前正式封面。", "success");
+  } finally {
+    activeProductionTask = "";
+    if (currentDraft) {
+      renderWorkflowMap(currentDraft);
+      updateTrialActionState(getWorkflowRecommendation(currentDraft, {
+        hasUnsaved: hasUnsavedChanges,
+        hasChecks: Boolean((currentDraft?.qualityChecks || []).length),
+        hasBlockingCheck: (currentDraft?.qualityChecks || []).some((item) => item.level === "error"),
+        exportReady: Boolean((currentDraft?.qualityChecks || []).length) && !(currentDraft?.qualityChecks || []).some((item) => item.level === "error"),
+        videoReady: Boolean(currentDraft?.exportInfo?.videoReady),
+        stage: currentProductionStage,
+      }));
+    }
+  }
+}
+
+async function handleToggleCoverBackgroundStar(backgroundId, starred) {
+  if (!backgroundId || !currentDraftId || isPreviewDraft()) {
+    return;
+  }
+
+  const data = await toggleCoverBackgroundStarOnServer(backgroundId, starred);
+  renderDraft(data.draft);
+  await loadDraftHistory();
+  flushSavedEditorState(data.draft);
+  renderWorkflowMap(data.draft);
+  renderReleaseControl(data.draft);
+  setStatus(starred ? "已收藏这张背景版本，后续重抽也会优先保留。" : "已取消收藏这张背景版本。", "success");
 }
 
 async function handlePartialSceneRebuild() {
@@ -1380,6 +2097,16 @@ async function handlePartialSceneRebuild() {
   }
 
   try {
+    activeProductionTask = "scene";
+    updateTrialActionState(getWorkflowRecommendation(currentDraft, {
+      hasUnsaved: hasUnsavedChanges,
+      hasChecks: Boolean((currentDraft?.qualityChecks || []).length),
+      hasBlockingCheck: (currentDraft?.qualityChecks || []).some((item) => item.level === "error"),
+      exportReady: Boolean((currentDraft?.qualityChecks || []).length) && !(currentDraft?.qualityChecks || []).some((item) => item.level === "error"),
+      videoReady: Boolean(currentDraft?.exportInfo?.videoReady),
+      stage: currentProductionStage,
+    }));
+    const nextPendingIndexAfterCurrent = findNextPendingStoryboardIndex(storyboardDraftState, currentStoryboardIndex + 1);
     if (partialSceneBtn) {
       partialSceneBtn.disabled = true;
       partialSceneBtn.textContent = "重建中...";
@@ -1393,22 +2120,66 @@ async function handlePartialSceneRebuild() {
       draftId: currentDraftId,
       sceneId: currentScene.id,
     });
+    markProductionAction(currentDraftId, "scene");
+    const nextStoryboard = Array.isArray(data?.draft?.storyboard) ? data.draft.storyboard : [];
+    if (nextStoryboard.length) {
+      const nextPendingIndex = findNextPendingStoryboardIndex(nextStoryboard, nextPendingIndexAfterCurrent);
+      currentStoryboardIndex = nextPendingIndex >= 0
+        ? nextPendingIndex
+        : clampStoryboardIndex(currentStoryboardIndex, nextStoryboard.length);
+    }
     renderDraft(data.draft);
     await loadDraftHistory();
-    setStatus("当前镜头已完成局部重建。", "success");
+    const remainingPending = countPendingStoryboardScenes(data?.draft?.storyboard);
+    setStatus(
+      remainingPending > 0
+        ? `当前镜头已完成补素材，已自动切到下一个待补镜头。剩余 ${remainingPending} 个待补镜头。`
+        : "当前镜头已完成补素材，这一轮待补镜头已经全部齐了，可以继续逐镜精修。",
+      "success",
+    );
     document.querySelector("#section-storyboard")?.scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (error) {
     setStatus(error.message || "局部重建失败", "error");
   } finally {
+    activeProductionTask = "";
     if (currentDraft) {
       renderWorkflowMap(currentDraft);
+      updateTrialActionState(getWorkflowRecommendation(currentDraft, {
+        hasUnsaved: hasUnsavedChanges,
+        hasChecks: Boolean((currentDraft?.qualityChecks || []).length),
+        hasBlockingCheck: (currentDraft?.qualityChecks || []).some((item) => item.level === "error"),
+        exportReady: Boolean((currentDraft?.qualityChecks || []).length) && !(currentDraft?.qualityChecks || []).some((item) => item.level === "error"),
+        videoReady: Boolean(currentDraft?.exportInfo?.videoReady),
+        stage: currentProductionStage,
+      }));
     }
   }
 }
 
+function countPendingStoryboardScenes(storyboard) {
+  return Array.isArray(storyboard)
+    ? storyboard.filter((scene) => !scene?.assetPath).length
+    : 0;
+}
+
+function findNextPendingStoryboardIndex(storyboard, startIndex = 0) {
+  if (!Array.isArray(storyboard) || !storyboard.length) {
+    return -1;
+  }
+
+  const normalizedStart = clampStoryboardIndex(startIndex, storyboard.length);
+  for (let offset = 0; offset < storyboard.length; offset += 1) {
+    const index = (normalizedStart + offset) % storyboard.length;
+    if (!storyboard[index]?.assetPath) {
+      return index;
+    }
+  }
+  return -1;
+}
+
 async function handleFullTrial() {
   if (currentProductionStage === "script") {
-    setStatus("请先确认预制脚本，再进入完整试产。", "info");
+    setStatus("请先确认预制脚本，再进入导出前检查。", "info");
     document.querySelector("#section-prep")?.scrollIntoView({ behavior: "smooth", block: "start" });
     return;
   }
@@ -1419,23 +2190,42 @@ async function handleFullTrial() {
   }
 
   if (isPreviewDraft()) {
-    setStatus("预览模式下不会执行真实完整试产。", "info");
+    setStatus("预览模式下不会执行真实导出前检查。", "info");
     return;
   }
 
   try {
+    activeProductionTask = "check";
+    updateTrialActionState(getWorkflowRecommendation(currentDraft, {
+      hasUnsaved: hasUnsavedChanges,
+      hasChecks: Boolean((currentDraft?.qualityChecks || []).length),
+      hasBlockingCheck: (currentDraft?.qualityChecks || []).some((item) => item.level === "error"),
+      exportReady: Boolean((currentDraft?.qualityChecks || []).length) && !(currentDraft?.qualityChecks || []).some((item) => item.level === "error"),
+      videoReady: Boolean(currentDraft?.exportInfo?.videoReady),
+      stage: currentProductionStage,
+    }));
     fullTrialBtn.disabled = true;
-    fullTrialBtn.textContent = "试产中...";
+    fullTrialBtn.textContent = "检查中...";
     if (hasUnsavedChanges) {
       await handleSaveDraft();
     }
     await handleQualityCheck();
-    setStatus("完整试产已完成：草稿已同步，并已完成导出前检查。", "success");
+    setStatus("导出前检查已完成，可以继续判断是否出片。", "success");
     document.querySelector("#section-export")?.scrollIntoView({ behavior: "smooth", block: "start" });
   } finally {
+    activeProductionTask = "";
     fullTrialBtn.disabled = false;
+    fullTrialBtn.textContent = "导出前检查";
     if (currentDraft) {
       renderWorkflowMap(currentDraft);
+      updateTrialActionState(getWorkflowRecommendation(currentDraft, {
+        hasUnsaved: hasUnsavedChanges,
+        hasChecks: Boolean((currentDraft?.qualityChecks || []).length),
+        hasBlockingCheck: (currentDraft?.qualityChecks || []).some((item) => item.level === "error"),
+        exportReady: Boolean((currentDraft?.qualityChecks || []).length) && !(currentDraft?.qualityChecks || []).some((item) => item.level === "error"),
+        videoReady: Boolean(currentDraft?.exportInfo?.videoReady),
+        stage: currentProductionStage,
+      }));
     }
   }
 }
@@ -1446,15 +2236,15 @@ function renderScriptPrep(draft) {
   }
 
   if (confirmScriptBtn) {
-    confirmScriptBtn.textContent = currentProductionStage === "script" ? "脚本确认，进入试产" : "已进入试产";
+    confirmScriptBtn.textContent = currentProductionStage === "script" ? "确认脚本并进入生产" : "已进入生产";
     confirmScriptBtn.disabled = currentProductionStage !== "script";
   }
 
   const segments = buildScriptPrepSegments(draft);
   const totalDuration = segments.reduce((sum, segment) => sum + segment.durationSec, 0);
   scriptPrepSummaryEl.textContent = currentProductionStage === "script"
-    ? "先确认每段作用、预计时长和整体节奏，再进入后续试产。"
-    : "脚本已经确认。后续如需回改，建议先回到这里重新校正节奏，再继续试产。";
+    ? "先确认每段作用、预计时长和整体节奏，再进入后续生产。"
+    : "脚本已经确认。后续如需回改，建议先回到这里重新校正节奏，再继续生产打磨。";
 
   scriptPrepMetricsEl.innerHTML = `
     <div class="script-prep-metric">
@@ -1491,7 +2281,7 @@ function renderScriptPrep(draft) {
           <strong>${segment.purpose}</strong>
         </div>
         <div>
-          <span>进入试产前检查点</span>
+          <span>进入生产前检查点</span>
           <strong>${segment.checkpoint}</strong>
         </div>
       </div>
@@ -1500,33 +2290,83 @@ function renderScriptPrep(draft) {
 }
 
 function buildScriptPrepSegments(draft) {
+  const script = getDraftScriptSource(draft);
   const blocks = [
-    { tag: "Hook", title: "开场判断", text: draft.hook || "", purpose: "先建立抓力和判断感", checkpoint: "确认开头是否足够抓人" },
-    { tag: "展开 1", title: "第一段展开", text: draft.sections?.[0] || "", purpose: "开始解释核心逻辑", checkpoint: "确认是不是一上来就进入有效信息" },
-    { tag: "展开 2", title: "第二段展开", text: draft.sections?.[1] || "", purpose: "承接并补足观点", checkpoint: "确认信息密度是否过高" },
-    { tag: "展开 3", title: "第三段展开", text: draft.sections?.[2] || "", purpose: "完成判断闭环", checkpoint: "确认节奏是否开始拖慢" },
-    { tag: "CTA", title: "结尾引导", text: draft.cta || "", purpose: "完成收束并给出动作", checkpoint: "确认结尾是否收得住" },
+    { tag: "Hook", title: "开场判断", text: script.hook || "", purpose: "先建立抓力和判断感", checkpoint: "确认开头是否足够抓人" },
+    { tag: "展开 1", title: "第一段展开", text: script.sections?.[0] || "", purpose: "开始解释核心逻辑", checkpoint: "确认是不是一上来就进入有效信息" },
+    { tag: "展开 2", title: "第二段展开", text: script.sections?.[1] || "", purpose: "承接并补足观点", checkpoint: "确认信息密度是否过高" },
+    { tag: "展开 3", title: "第三段展开", text: script.sections?.[2] || "", purpose: "完成判断闭环", checkpoint: "确认节奏是否开始拖慢" },
+    { tag: "CTA", title: "结尾引导", text: script.cta || "", purpose: "完成收束并给出动作", checkpoint: "确认结尾是否收得住" },
   ].filter((block) => block.text.trim());
+  const durationByBlock = estimateScriptPrepDurations(blocks, Number(draft?.durationMode || 90));
 
   return blocks.map((block, index) => ({
     index: index + 1,
     ...block,
-    durationSec: estimateScriptDuration(block.text),
+    durationSec: durationByBlock[index] || 0,
   }));
 }
 
-function estimateScriptDuration(text) {
-  const length = String(text || "").replace(/\s+/g, "").length;
-  return Math.max(5, Math.min(26, Math.round(length / 8)));
+function estimateScriptPrepDurations(blocks, durationMode) {
+  const profile = getPrepDurationProfile(durationMode);
+  const lengths = blocks.map((block) => String(block.text || "").replace(/\s+/g, "").length);
+  const totalChars = Math.max(lengths.reduce((sum, length) => sum + length, 0), 1);
+  const totalDuration = clampValue(Math.round(totalChars / profile.charRate), profile.minSec, profile.maxSec);
+  const durations = [];
+  let allocated = 0;
+
+  lengths.forEach((length, index) => {
+    const remaining = lengths.length - index - 1;
+    const remainingMin = remaining * profile.minSegmentSec;
+    const proportional = Math.round((length / totalChars) * totalDuration);
+    const duration = index === lengths.length - 1
+      ? Math.max(profile.minSegmentSec, totalDuration - allocated)
+      : clampValue(
+          proportional,
+          profile.minSegmentSec,
+          Math.max(profile.minSegmentSec, totalDuration - allocated - remainingMin),
+        );
+    durations.push(duration);
+    allocated += duration;
+  });
+
+  return durations;
 }
 
-function handleConfirmScriptStage() {
+function getPrepDurationProfile(durationMode) {
+  if (Number(durationMode) === 60) {
+    return { charRate: 3.7, minSec: 48, maxSec: 66, minSegmentSec: 4 };
+  }
+  if (Number(durationMode) === 120) {
+    return { charRate: 3.05, minSec: 108, maxSec: 132, minSegmentSec: 5 };
+  }
+  return { charRate: 3.2, minSec: 78, maxSec: 102, minSegmentSec: 4 };
+}
+
+function clampValue(value, min, max) {
+  return Math.max(min, Math.min(max, Number(value || 0)));
+}
+
+async function handleConfirmScriptStage() {
   if (!currentDraftId) {
     return;
   }
 
+  if (currentDraft) {
+    currentDraft.productionStage = "production";
+    renderDraft({ ...currentDraft, productionStage: "production" });
+  }
   setProductionStage("production");
-  setStatus("预制脚本已确认，接下来进入试产打磨。", "success");
+  try {
+    const data = await postJson("/api/drafts/meta", {
+      draftId: currentDraftId,
+      productionStage: "production",
+    });
+    renderDraft(data.draft);
+    setStatus("脚本已确认，接下来进入生产打磨。", "success");
+  } catch (error) {
+    setStatus(error.message || "脚本确认已在本地生效，但后台写回失败。", "error");
+  }
   document.querySelector("#section-preview")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
@@ -1563,14 +2403,28 @@ function deriveProductionStage(draft) {
   if (draft?.exportInfo?.videoReady) {
     return "export";
   }
+  const hasPreviewAssets =
+    Boolean(draft?.assets?.coverPath) ||
+    Boolean(draft?.assets?.voicePath) ||
+    Boolean(draft?.coverImage) ||
+    Boolean(draft?.audioUrl) ||
+    Boolean((draft?.subtitleEntries || []).length) ||
+    Boolean((draft?.storyboard || []).length);
+  const hasDraftOutput = Boolean((draft?.timeline || []).length);
   if (draft?.qualityChecks?.length || draft?.workflowStatus === "ready" || draft?.workflowStatus === "exported") {
+    return "production";
+  }
+  if (hasPreviewAssets || hasDraftOutput) {
     return "production";
   }
   return "script";
 }
 
 function syncProductionStage() {
-  appShellEl?.classList.toggle("is-script-stage", currentProductionStage === "script");
+  const isScriptStage = currentProductionStage === "script";
+  appShellEl?.classList.toggle("is-script-stage", isScriptStage);
+  storyboardSectionEl?.classList.toggle("is-stage-locked", isScriptStage);
+  finalStepSectionEl?.classList.toggle("is-stage-locked", isScriptStage);
 }
 
 function setProductionStage(stage) {
@@ -1584,6 +2438,15 @@ function setProductionStage(stage) {
   if (currentDraft) {
     renderWorkflowMap(currentDraft);
     renderScriptPrep(currentDraft);
+    renderReleaseControl(currentDraft);
+    renderPreviewRecommendations(getWorkflowRecommendation(currentDraft, {
+      hasUnsaved: hasUnsavedChanges,
+      hasChecks: Boolean((currentDraft.qualityChecks || []).length),
+      hasBlockingCheck: (currentDraft.qualityChecks || []).some((item) => item.level === "error"),
+      exportReady: Boolean((currentDraft.qualityChecks || []).length) && !(currentDraft.qualityChecks || []).some((item) => item.level === "error"),
+      videoReady: Boolean(currentDraft.exportInfo?.videoReady),
+      stage: currentProductionStage,
+    }), currentDraft);
   }
 }
 
@@ -1628,280 +2491,192 @@ function storeDraftStage(draftId, stage) {
   }
 }
 
-function renderQualityChecks(checks) {
-  if (currentDraft) {
-    currentDraft.qualityChecks = checks || [];
-    renderWorkflowMap(currentDraft);
-    renderReleaseControl(currentDraft);
+function getProductionActionState(draftId) {
+  if (!draftId) {
+    return { audio: false, cover: false, scene: false };
   }
-  renderQualityOverview(checks, currentDraft);
+  try {
+    const raw = window.localStorage.getItem(PRODUCTION_ACTIONS_STORAGE_KEY);
+    const map = raw ? JSON.parse(raw) : {};
+    return {
+      audio: Boolean(map?.[draftId]?.audio),
+      cover: Boolean(map?.[draftId]?.cover),
+      scene: Boolean(map?.[draftId]?.scene),
+    };
+  } catch {
+    return { audio: false, cover: false, scene: false };
+  }
+}
 
-  if (!checks.length) {
-    qualityList.innerHTML = `<div class="quality-item info"><strong>暂无检查项</strong><span>点击“导出前检查”后，这里会展示具体的阻塞项、提醒项和说明项。</span></div>`;
+function markProductionAction(draftId, action) {
+  if (!draftId || !action) {
     return;
   }
-
-  const medicalChecks = checks.filter(isMedicalQualityItem);
-  const exportChecks = checks.filter((item) => !isMedicalQualityItem(item));
-  const groups = [
-    { title: "医疗风控", items: medicalChecks, emptyText: "当前未返回医疗风控检查项。" },
-    { title: "导出条件", items: exportChecks, emptyText: "当前未返回导出条件检查项。" },
-  ].filter((group) => group.items.length);
-
-  qualityList.innerHTML = groups
-    .map((group) => {
-      const toneClass = group.title === "医疗风控" ? "quality-group-medical" : "quality-group-export";
-      return `
-        <section class="quality-group ${toneClass}">
-          <div class="quality-group-head">
-            <strong>${group.title}</strong>
-            <span>${group.items.length} 项</span>
-          </div>
-          <div class="quality-group-list">
-            ${group.items.map(renderQualityItem).join("")}
-          </div>
-        </section>
-      `;
-    })
-    .join("");
+  try {
+    const raw = window.localStorage.getItem(PRODUCTION_ACTIONS_STORAGE_KEY);
+    const map = raw ? JSON.parse(raw) : {};
+    map[draftId] = {
+      audio: Boolean(map?.[draftId]?.audio),
+      cover: Boolean(map?.[draftId]?.cover),
+      scene: Boolean(map?.[draftId]?.scene),
+      [action]: true,
+    };
+    window.localStorage.setItem(PRODUCTION_ACTIONS_STORAGE_KEY, JSON.stringify(map));
+  } catch {
+    // ignore storage errors
+  }
 }
 
-function renderQualityItem(item) {
-  return `<div class="quality-item ${item.level}">
-    <strong>${item.label}</strong>
-    <span>${item.detail}</span>
-  </div>`;
-}
-
-function isMedicalQualityItem(item) {
-  const label = String(item?.label || "");
-  return label.includes("医疗") || label.includes("OCR") || label.includes("医学科普");
+function renderQualityChecks(checks) {
+  return renderQualityChecksView(checks, {
+    currentDraft,
+    setCurrentDraftQualityChecks(nextChecks) {
+      currentDraft.qualityChecks = nextChecks;
+    },
+    renderWorkflowMap,
+    renderReleaseControl,
+    renderQualityOverview,
+    qualityList,
+  });
 }
 
 function renderQualityOverview(checks, draft) {
-  const hasError = checks.some((item) => item.level === "error");
-  const hasWarning = checks.some((item) => item.level === "warning");
-  const medicalBlocked = checks.some((item) => String(item.label || "").includes("医疗文案预检未通过"));
-  const medicalReview = checks.some((item) => String(item.label || "").includes("医疗文案建议人工复核") || String(item.label || "").includes("医疗合规预检失败"));
-  const medicalPass = checks.some((item) => String(item.label || "").includes("医疗文案预检通过"));
-
-  let status = "idle";
-  let title = "还没有检查结论";
-  let text = "先运行一次导出前检查，这里会告诉你当前是否可以导出，以及建议的下一步动作。";
-
-  if (checks.length) {
-    if (medicalBlocked) {
-      status = "blocked";
-      title = "医疗合规未通过";
-      text = "火山风控策略已拦截当前文案，建议先修改功效承诺、违规表述或医疗广告风险点，再继续导出。";
-    } else if (hasError) {
-      status = "blocked";
-      title = "暂时不能导出";
-      text = "当前存在阻塞问题，建议先处理缺失素材或结构问题，并把工作流状态标记为“待修改”。";
-    } else if (medicalReview) {
-      status = "warning";
-      title = "建议人工复核";
-      text = "火山风控策略建议人工复核当前文案。即使其他素材齐全，也建议先确认医疗表述、适应症和功效承诺是否合规。";
-    } else if (hasWarning) {
-      status = "warning";
-      title = "可以继续，但有提醒";
-      text = "目前可以继续推进，但建议先处理提醒项，再决定是否直接导出。";
-    } else {
-      status = "ready";
-      title = medicalPass ? "医疗预检已通过，可继续导出" : "检查通过，可以导出";
-      text = medicalPass
-        ? (
-          draft?.workflowStatus === "ready"
-            ? "火山医疗文案预检已通过，当前草稿也已标记为“可导出”，可以直接执行导出。"
-            : "火山医疗文案预检已通过，建议将工作流状态改为“可导出”，再执行导出。"
-        )
-        : (
-          draft?.workflowStatus === "ready"
-            ? "当前草稿已经标记为“可导出”，可以直接执行导出。"
-            : "当前没有阻塞问题，建议将工作流状态改为“可导出”，再执行导出。"
-        );
-    }
-  }
-
-  qualityOverviewEl.className = `quality-overview quality-overview-${status}`;
-  qualityOverviewTitleEl.textContent = title;
-  qualityOverviewTextEl.textContent = text;
-  const showReadyAction = status === "ready" && draft?.workflowStatus !== "ready";
-  qualityOverviewActionsEl.classList.toggle("hidden", !showReadyAction);
+  return renderQualityOverviewView(checks, draft, {
+    qualityOverviewEl,
+    qualityOverviewTitleEl,
+    qualityOverviewTextEl,
+    qualityOverviewActionsEl,
+  });
 }
 
 function renderScriptView(draft) {
-  const blocks = [
-    { key: "hook", label: "开头 Hook", text: draft.hook },
-    { key: "section-1", label: "第 1 段", text: draft.sections?.[0] || "" },
-    { key: "section-2", label: "第 2 段", text: draft.sections?.[1] || "" },
-    { key: "section-3", label: "第 3 段", text: draft.sections?.[2] || "" },
-    { key: "cta", label: "结尾引导", text: draft.cta },
-  ];
-
-  scriptEl.innerHTML = blocks
-    .map(
-      (block) => `
-        <article class="script-block${currentEditorFocus === block.key ? " active" : ""}">
-          <span class="script-label">${block.label}</span>
-          <p>${escapeHtml(block.text)}</p>
-        </article>
-      `,
-    )
-    .join("");
+  scriptEl.innerHTML = buildScriptViewHtml({
+    draft,
+    currentEditorFocus,
+    getDraftScriptSource,
+    escapeHtml,
+  });
 }
 
 function renderSubtitleView(entries) {
-  subtitleMetaEl.textContent = entries.length ? `共 ${entries.length} 条字幕` : "还没有字幕内容";
-
-  subtitleEl.innerHTML = entries.length
-    ? entries
-        .map(
-          (entry, index) => `
-            <div class="subtitle-row">
-              <span class="subtitle-index">${index + 1}</span>
-              <div>
-                <div class="subtitle-time">${formatTime(entry.startSec)} - ${formatTime(entry.endSec)}</div>
-                <div class="subtitle-text">${escapeHtml(entry.text)}</div>
-              </div>
-            </div>
-          `,
-        )
-        .join("")
-    : `<div class="subtitle-empty">当前没有可显示的字幕时间轴。</div>`;
+  const view = buildSubtitleViewModel({
+    entries,
+    formatTime,
+    escapeHtml,
+  });
+  subtitleMetaEl.textContent = view.metaText;
+  subtitleEl.innerHTML = view.html;
 }
 
 function renderStoryboardView(storyboard, assetVersion) {
   if (!storyboardListEl) {
     return;
   }
-
-  if (!storyboard?.length) {
-    storyboardListEl.innerHTML = `<div class="subtitle-empty">当前还没有可编辑的分镜内容。</div>`;
-    return;
+  try {
+    const view = buildStoryboardViewModel({
+      storyboard,
+      assetVersion,
+      currentStoryboardIndex,
+      currentProductionStage,
+      toVersionedMediaUrl,
+      escapeHtml,
+      clampStoryboardIndex,
+      getVisualTypeLabel,
+      buildVisualTypeOptions,
+    });
+    currentStoryboardIndex = view.currentStoryboardIndex;
+    storyboardListEl.innerHTML = view.html;
+  } catch (error) {
+    console.error("[storyboard-view]", error);
+    storyboardListEl.innerHTML = storyboard?.length
+      ? buildStoryboardFallbackHtml(storyboard, assetVersion, currentStoryboardIndex)
+      : storyboardListEl.innerHTML;
   }
 
-  currentStoryboardIndex = clampStoryboardIndex(currentStoryboardIndex, storyboard.length);
-  const currentScene = storyboard[currentStoryboardIndex] || storyboard[0];
-  const preview = currentScene?.assetPath ? toVersionedMediaUrl(currentScene.assetPath, assetVersion) : "";
-  const totalDuration = storyboard.reduce((sum, scene) => sum + Number(scene.durationSec || 0), 0);
-  const sceneDuration = Number(currentScene.durationSec || 0);
-  const sceneShare = totalDuration ? Math.round((sceneDuration / totalDuration) * 100) : 0;
-  const voiceoverLength = String(currentScene.voiceover || "").trim().length;
-  const sceneReview = getSceneReviewFocus(currentScene, {
-    totalDuration,
-    sceneShare,
-    index: currentStoryboardIndex,
-    storyboardLength: storyboard.length,
-  });
+  if (storyboard?.length && storyboardListEl.innerHTML.includes("storyboard-shell-locked")) {
+    storyboardListEl.innerHTML = buildStoryboardFallbackHtml(storyboard, assetVersion, currentStoryboardIndex);
+  }
+}
 
-  storyboardListEl.innerHTML = `
+function resolveRenderableStoryboard(draft) {
+  const directStoryboard = cloneStoryboard(draft?.storyboard || []);
+  if (directStoryboard.length) {
+    return directStoryboard;
+  }
+
+  if (currentDraft?.id === draft?.id) {
+    const currentStoryboard = cloneStoryboard(currentDraft?.storyboard || []);
+    if (currentStoryboard.length) {
+      return currentStoryboard;
+    }
+  }
+
+  const timeline = Array.isArray(draft?.timeline) ? draft.timeline : [];
+  if (!timeline.length) {
+    return [];
+  }
+
+  return timeline.map((item, index) => ({
+    id: item.sceneId || `scene-${index + 1}`,
+    sceneTitle: item.overlay || `镜头 ${index + 1}`,
+    visualType: item.visualType || "image",
+    durationSec: Math.max(1, Math.round(Number(item.endSec || 0) - Number(item.startSec || 0))),
+    voiceover: "",
+    visualPrompt: "",
+    assetPath: item.assetPath || "",
+    assetType: item.assetType || "",
+  }));
+}
+
+function buildStoryboardFallbackHtml(storyboard, assetVersion, index) {
+  const safeIndex = clampStoryboardIndex(index, storyboard.length);
+  const currentScene = storyboard[safeIndex] || storyboard[0];
+  const preview = currentScene?.assetPath ? toVersionedMediaUrl(currentScene.assetPath, assetVersion) : "";
+  const pendingCount = countPendingStoryboardScenes(storyboard);
+
+  return `
     <div class="storyboard-shell">
       <aside class="storyboard-nav">
         <div class="storyboard-nav-head">
           <strong>镜头列表</strong>
-          <span>${storyboard.length} 个镜头 · ${totalDuration} 秒</span>
-        </div>
-        <div class="storyboard-timeline">
-          ${storyboard
-            .map((scene, index) => {
-              const durationSec = Number(scene.durationSec || 0);
-              const share = totalDuration ? Math.round((durationSec / totalDuration) * 100) : 0;
-              const signal = getSceneNavSignal(scene, {
-                index,
-                storyboardLength: storyboard.length,
-                share,
-              });
-              return `<span class="storyboard-timeline-segment${index === currentStoryboardIndex ? " active" : ""} ${signal.segmentClass}" style="flex:${Math.max(1, Number(scene.durationSec || 1))}"></span>`;
-            })
-            .join("")}
+          <span>${storyboard.length} 个镜头${pendingCount ? ` · 待补 ${pendingCount} 个` : " · 已全部就绪"}</span>
         </div>
         <div class="storyboard-scene-list">
-          ${storyboard
-            .map((scene, index) => {
-              const isActive = index === currentStoryboardIndex ? " active" : "";
-              const durationSec = Number(scene.durationSec || 0);
-              const share = totalDuration ? Math.round((durationSec / totalDuration) * 100) : 0;
-              const signal = getSceneNavSignal(scene, {
-                index,
-                storyboardLength: storyboard.length,
-                share,
-              });
-              return `
-                <button type="button" class="storyboard-scene-item${isActive} ${signal.itemClass}" data-scene-select="${index}">
-                  <div class="storyboard-scene-top">
-                    <span class="storyboard-scene-index">Scene ${index + 1}</span>
-                    <span class="storyboard-scene-flag ${signal.flagClass}">${signal.flag}</span>
-                  </div>
-                  <strong>${escapeHtml(scene.sceneTitle || `镜头 ${index + 1}`)}</strong>
-                  <div class="storyboard-scene-meta">
-                    <span>${escapeHtml(getVisualTypeLabel(scene.visualType))}</span>
-                    <span>${durationSec} 秒</span>
-                    <span>${share}% 占比</span>
-                  </div>
-                  <div class="storyboard-scene-note">${escapeHtml(signal.note)}</div>
-                </button>
-              `;
-            })
-            .join("")}
+          ${storyboard.map((scene, sceneIndex) => `
+            <button type="button" class="storyboard-scene-item${sceneIndex === safeIndex ? " active" : ""}" data-scene-select="${sceneIndex}">
+              <div class="storyboard-scene-top">
+                <span class="storyboard-scene-index">Scene ${sceneIndex + 1}</span>
+                <span class="storyboard-scene-flag ${scene?.assetPath ? "is-anchor" : "is-normal"}">${scene?.assetPath ? "就绪" : "待补"}</span>
+              </div>
+              <strong>${escapeHtml(scene.sceneTitle || `镜头 ${sceneIndex + 1}`)}</strong>
+              <div class="storyboard-scene-meta">
+                <span>${escapeHtml(getVisualTypeLabel(scene.visualType))}</span>
+                <span>${Number(scene.durationSec || 0)} 秒</span>
+              </div>
+            </button>
+          `).join("")}
         </div>
       </aside>
-
-      <article class="storyboard-card" data-scene-id="${escapeHtml(currentScene.id || `scene-${currentStoryboardIndex + 1}`)}">
+      <article class="storyboard-card" data-scene-id="${escapeHtml(currentScene?.id || "")}">
         <div class="storyboard-decision-bar">
           <div class="storyboard-decision-copy">
-            <span class="storyboard-section-label">当前镜头判断</span>
-            <strong>${escapeHtml(sceneReview.title)}</strong>
-            <p>${escapeHtml(sceneReview.text)}</p>
+            <span class="storyboard-section-label">当前镜头</span>
+            <strong>${escapeHtml(currentScene?.sceneTitle || `镜头 ${safeIndex + 1}`)}</strong>
+            <p>${currentScene?.assetPath ? "这一镜已经有素材，先看画面，再决定是否重做。" : "这一镜还没有素材，先补这一镜，系统会自动带你继续补后面的待补镜头。"}</p>
           </div>
           <div class="storyboard-decision-metrics">
             <div class="storyboard-decision-metric">
               <span>当前镜头</span>
-              <strong>第 ${currentStoryboardIndex + 1} / ${storyboard.length} 个</strong>
+              <strong>第 ${safeIndex + 1} / ${storyboard.length} 个</strong>
             </div>
             <div class="storyboard-decision-metric">
-              <span>时长占比</span>
-              <strong>${sceneShare}%</strong>
+              <span>待补镜头</span>
+              <strong>${pendingCount} 个</strong>
             </div>
             <div class="storyboard-decision-metric">
-              <span>口播长度</span>
-              <strong>${voiceoverLength} 字</strong>
+              <span>当前状态</span>
+              <strong>${currentScene?.assetPath ? "素材已就绪" : "等待补素材"}</strong>
             </div>
-          </div>
-        </div>
-        <div class="storyboard-card-head">
-          <div class="storyboard-card-head-main">
-            <div>
-              <strong>Scene ${currentStoryboardIndex + 1}</strong>
-              <span>${escapeHtml(getVisualTypeLabel(currentScene.visualType))} · 当前正在编辑</span>
-            </div>
-            <span class="storyboard-card-meta">${Number(currentScene.durationSec || 0)} 秒</span>
-          </div>
-          <div class="storyboard-card-actions">
-            <div class="storyboard-action-group">
-              <span class="storyboard-action-label">结构</span>
-              <button type="button" class="switch-btn storyboard-add-btn" data-scene-index="${currentStoryboardIndex}">新增镜头</button>
-              <button type="button" class="switch-btn storyboard-move-btn" data-scene-move="up" data-scene-index="${currentStoryboardIndex}" ${currentStoryboardIndex === 0 ? "disabled" : ""}>上移</button>
-              <button type="button" class="switch-btn storyboard-move-btn" data-scene-move="down" data-scene-index="${currentStoryboardIndex}" ${currentStoryboardIndex === storyboard.length - 1 ? "disabled" : ""}>下移</button>
-            </div>
-            <div class="storyboard-action-group storyboard-action-group-danger">
-              <span class="storyboard-action-label">维护</span>
-              <button type="button" class="switch-btn storyboard-delete-btn" data-scene-index="${currentStoryboardIndex}" ${storyboard.length <= 1 ? "disabled" : ""}>删除镜头</button>
-            </div>
-          </div>
-        </div>
-        <div class="storyboard-card-summary">
-          <div class="storyboard-summary-item">
-            <span>当前镜头</span>
-            <strong>第 ${currentStoryboardIndex + 1} / ${storyboard.length} 个</strong>
-          </div>
-          <div class="storyboard-summary-item">
-            <span>镜头类型</span>
-            <strong>${escapeHtml(getVisualTypeLabel(currentScene.visualType))}</strong>
-          </div>
-          <div class="storyboard-summary-item">
-            <span>时长</span>
-            <strong>${Number(currentScene.durationSec || 0)} 秒</strong>
           </div>
         </div>
         <div class="storyboard-card-body">
@@ -1909,37 +2684,37 @@ function renderStoryboardView(storyboard, assetVersion) {
             <div class="storyboard-panel-head">
               <div>
                 <div class="storyboard-section-label">镜头预览</div>
-                <strong>先看当前镜头画面和停留感</strong>
+                <strong>先确认当前镜头有没有出来</strong>
               </div>
-              <span class="storyboard-panel-chip">${preview ? "已有素材" : "等待素材"}</span>
+              <span class="storyboard-panel-chip">${currentScene?.assetPath ? "已有素材" : "等待素材"}</span>
             </div>
             <div class="storyboard-thumb-shell">
-              ${preview ? `<img src="${preview}" alt="${escapeHtml(currentScene.sceneTitle || `Scene ${currentStoryboardIndex + 1}`)}" class="storyboard-thumb" />` : `<div class="storyboard-thumb-empty">暂无素材</div>`}
+              ${preview ? `<img src="${preview}" alt="${escapeHtml(currentScene.sceneTitle || `Scene ${safeIndex + 1}`)}" class="storyboard-thumb" />` : `<div class="storyboard-thumb-empty">暂无素材</div>`}
             </div>
-            <div class="storyboard-visual-caption">${escapeHtml(currentScene.sceneTitle || `镜头 ${currentStoryboardIndex + 1}`)}</div>
+            <div class="storyboard-visual-caption">${escapeHtml(currentScene?.visualPrompt || "这里会先展示当前镜头素材。")}</div>
           </div>
           <div class="storyboard-fields">
             <div class="storyboard-fields-group storyboard-panel-block">
               <div class="storyboard-panel-head">
                 <div>
                   <div class="storyboard-section-label">镜头参数</div>
-                  <strong>再改结构、类型和时长</strong>
+                  <strong>至少先能看到 scene 和当前素材</strong>
                 </div>
               </div>
               <label>
                 <span>镜头标题</span>
-                <input data-storyboard-index="${currentStoryboardIndex}" data-scene-field="sceneTitle" value="${escapeHtml(currentScene.sceneTitle || "")}" />
+                <input data-storyboard-index="${safeIndex}" data-scene-field="sceneTitle" value="${escapeHtml(currentScene?.sceneTitle || "")}" />
               </label>
               <div class="storyboard-inline-fields">
                 <label>
                   <span>镜头类型</span>
-                  <select data-storyboard-index="${currentStoryboardIndex}" data-scene-field="visualType">
-                    ${buildVisualTypeOptions(currentScene.visualType)}
+                  <select data-storyboard-index="${safeIndex}" data-scene-field="visualType">
+                    ${buildVisualTypeOptions(currentScene?.visualType)}
                   </select>
                 </label>
                 <label>
                   <span>时长</span>
-                  <input data-storyboard-index="${currentStoryboardIndex}" data-scene-field="durationSec" type="number" min="4" max="40" step="1" value="${Number(currentScene.durationSec || 6)}" />
+                  <input data-storyboard-index="${safeIndex}" data-scene-field="durationSec" type="number" min="4" max="40" step="1" value="${Number(currentScene?.durationSec || 6)}" />
                 </label>
               </div>
             </div>
@@ -1947,18 +2722,17 @@ function renderStoryboardView(storyboard, assetVersion) {
               <div class="storyboard-panel-head">
                 <div>
                   <div class="storyboard-section-label">镜头口播</div>
-                  <strong>最后再判断要不要重建</strong>
+                  <strong>重做或继续补下一镜</strong>
                 </div>
-                <span class="storyboard-panel-chip">${voiceoverLength} 字</span>
               </div>
               <label>
                 <span>口播文案</span>
-                <textarea data-storyboard-index="${currentStoryboardIndex}" data-scene-field="voiceover" rows="8">${escapeHtml(currentScene.voiceover || "")}</textarea>
+                <textarea data-storyboard-index="${safeIndex}" data-scene-field="voiceover" rows="8">${escapeHtml(currentScene?.voiceover || "")}</textarea>
               </label>
               <div class="storyboard-action-note">
-                <p>如果只是这一镜不顺，先保存当前分镜，再重建当前镜头；只有连续几镜都不顺，才考虑完整试产。</p>
+                <p>${pendingCount > 0 ? "当前工作台已切回真实镜头视图。你现在可以补当前镜头，补完后系统会继续推进。" : "这一轮镜头都已出来，可以开始逐镜微调。"}</p>
                 <div class="storyboard-action-note-buttons">
-                  <button type="button" class="switch-btn storyboard-refresh-btn" data-scene-id="${escapeHtml(currentScene.id || "")}">重做素材</button>
+                  <button type="button" class="switch-btn storyboard-refresh-btn" data-scene-id="${escapeHtml(currentScene?.id || "")}">${pendingCount > 0 ? "补当前镜头并继续" : "重做当前镜头"}</button>
                 </div>
               </div>
             </div>
@@ -1967,109 +2741,6 @@ function renderStoryboardView(storyboard, assetVersion) {
       </article>
     </div>
   `;
-}
-
-function getSceneReviewFocus(scene, context) {
-  const durationSec = Number(scene?.durationSec || 0);
-  const voiceover = String(scene?.voiceover || "").trim();
-  const visualType = String(scene?.visualType || "image");
-  const isOpening = context.index === 0;
-  const isClosing = context.index === context.storyboardLength - 1;
-
-  if (isOpening) {
-    return {
-      title: "先看这一镜能不能把人留下来",
-      text: "这是开场镜头。优先判断第一句口播、画面类型和标题承接是否足够抓人，再决定要不要重建当前镜头。",
-    };
-  }
-
-  if (isClosing) {
-    return {
-      title: "先看这一镜能不能把结尾收住",
-      text: "这是结尾镜头。优先判断 CTA、情绪收束和停留时长是否自然，避免结尾突然断掉或拖尾。",
-    };
-  }
-
-  if (durationSec >= 10 || context.sceneShare >= 22) {
-    return {
-      title: "先看这段会不会拖慢整体节奏",
-      text: "这一镜头占比偏高。先判断它的信息密度和视觉变化是否支撑这么长的停留，不够就优先缩时长或拆镜头。",
-    };
-  }
-
-  if (voiceover.length >= 70) {
-    return {
-      title: "先看这段口播会不会压垮画面",
-      text: "这段口播偏长。先判断一句话里承载的信息是不是太多，必要时先回文案层拆句，再决定是否改镜头。",
-    };
-  }
-
-  if (visualType === "quote" || visualType === "chart") {
-    return {
-      title: "先看画面是否真的在支撑判断",
-      text: "这类镜头更依赖信息可读性。优先判断观众能不能一眼读懂，而不是先追求更复杂的视觉效果。",
-    };
-  }
-
-  return {
-    title: "先看这镜头有没有打断整体流动",
-    text: "优先判断当前镜头的时长、口播和画面切换是否顺着前后文流动。只有它真的掉链子，才值得单独重建。",
-  };
-}
-
-function getSceneNavSignal(scene, context) {
-  const durationSec = Number(scene?.durationSec || 0);
-  const voiceoverLength = String(scene?.voiceover || "").trim().length;
-  const isOpening = context.index === 0;
-  const isClosing = context.index === context.storyboardLength - 1;
-
-  if (isOpening) {
-    return {
-      flag: "开场",
-      flagClass: "is-anchor",
-      itemClass: "is-anchor",
-      segmentClass: "is-anchor",
-      note: "先看第一屏抓力和开头承接。",
-    };
-  }
-
-  if (isClosing) {
-    return {
-      flag: "结尾",
-      flagClass: "is-anchor",
-      itemClass: "is-anchor",
-      segmentClass: "is-anchor",
-      note: "先看结尾收束和 CTA 是否自然。",
-    };
-  }
-
-  if (durationSec >= 10 || context.share >= 22) {
-    return {
-      flag: "偏长",
-      flagClass: "is-heavy",
-      itemClass: "is-heavy",
-      segmentClass: "is-heavy",
-      note: "这段占比偏高，优先看会不会拖节奏。",
-    };
-  }
-
-  if (voiceoverLength >= 70) {
-    return {
-      flag: "偏密",
-      flagClass: "is-dense",
-      itemClass: "is-dense",
-      segmentClass: "is-dense",
-      note: "口播偏密，优先看信息是否过载。",
-    };
-  }
-
-  return {
-    flag: "正常",
-    flagClass: "is-normal",
-    itemClass: "is-normal",
-    segmentClass: "is-normal",
-    note: "优先看是否顺着前后文自然流动。",
-  };
 }
 
 function renderExportSummary(info) {
@@ -2154,6 +2825,7 @@ async function loadRuntimeStatus() {
     const modeLabel = runtime.mode === "api" ? "API 模式" : "本地兜底模式";
     const readinessLabel = runtime.ffmpegInstalled ? "可直接导出" : "仅可生成脚本";
     const systemLabel = `${runtime.apiKeyConfigured ? "已配置 API Key" : "未配置 API Key"} / ${runtime.ffmpegInstalled ? "已安装 ffmpeg" : "未安装 ffmpeg"}`;
+    const environmentLabel = runtime.runtimeEnvironment === "docker" ? "Docker 容器" : "本机环境";
     runtimeStatusEl.innerHTML = `
       <article class="runtime-overview-card">
         <div class="runtime-overview-head">
@@ -2173,6 +2845,10 @@ async function loadRuntimeStatus() {
             <span>系统</span>
             <strong>${systemLabel}</strong>
           </div>
+          <div class="runtime-overview-pill">
+            <span>运行</span>
+            <strong>${environmentLabel}</strong>
+          </div>
         </div>
       </article>
       <details class="runtime-details" open>
@@ -2184,6 +2860,7 @@ async function loadRuntimeStatus() {
             runtimeRouteCard("封面模型", runtime.llm?.image, runtime.imageModel || "-"),
             runtimeRouteCard("配音模型", runtime.llm?.tts, runtime.ttsModel || "-"),
             runtimeRouteCard("风控策略", runtime.llm?.moderation, runtime.moderationModel || "-"),
+            runtimeCard("运行环境", environmentLabel),
             runtimeCard("系统状态", systemLabel),
           ].join("")}
         </div>
@@ -2311,6 +2988,12 @@ function getRuntimeRouteActiveLabel(title, route) {
   if (title === "文案模型" || title === "分镜模型") {
     if (provider === "openai-compatible") {
       return "文本远程生效";
+    }
+  }
+
+  if (title === "转写模型") {
+    if (provider === "volcengine-doubao-asr" || provider === "doubao-asr" || provider.includes("bigasr")) {
+      return "火山转写生效";
     }
   }
 
@@ -2555,124 +3238,23 @@ async function loadDraftHistory() {
 }
 
 function renderHistory(drafts) {
-  if (!historyList) {
-    return;
-  }
-  renderHistorySummary(drafts);
-
-  if (!drafts.length) {
-    historyList.innerHTML = `<p class="status">当前筛选条件下没有草稿。</p>`;
-    return;
-  }
-
-  historyList.innerHTML = drafts
-    .map((draft) => {
-      const isActive = draft.id === currentDraftId ? " active" : "";
-      const readiness = buildHistoryReadiness(draft);
-      const activeStateLabel = draft.id === currentDraftId ? "当前展开" : "点击展开";
-      const productionStageLabel = getProductionStageLabel(draft.productionStage || deriveProductionStage(draft));
-      return `
-        <button type="button" class="history-item${isActive}" data-draft-id="${draft.id}">
-          <div class="history-head">
-            <strong>${draft.starred ? "★ " : ""}${draft.title}</strong>
-            <span class="history-updated">${formatDateTime(draft.updatedAt || draft.createdAt)} · ${activeStateLabel}</span>
-          </div>
-          <div class="history-compact">
-            <span>${draft.topic}</span>
-            <div class="history-tags">
-              <span>${productionStageLabel}</span>
-              <span>${draft.coverStyleLabel}</span>
-              <span>${draft.durationMode} 秒</span>
-            </div>
-          </div>
-          <div class="history-detail">
-            <span>${draft.topic}</span>
-            <div class="history-tags">
-              <span>${productionStageLabel}</span>
-              <span>${draft.coverStyleLabel}</span>
-              <span>${draft.durationMode} 秒</span>
-              <span>${draft.workflowStatusLabel}</span>
-              <span>${draft.exportStatusLabel}</span>
-            </div>
-            <div class="history-foot">
-              <span>${readiness}</span>
-              <span>${draft.blockingIssueCount ? `${draft.blockingIssueCount} 个阻塞问题` : draft.qualityCheckCount ? `${draft.qualityCheckCount} 个检查项` : "未运行质检"}</span>
-            </div>
-          </div>
-        </button>
-      `;
-    })
-    .join("");
-
-  historyList.querySelectorAll("[data-draft-id]").forEach((button) => {
-    button.addEventListener("click", async () => {
-      await loadDraft(button.dataset.draftId);
-    });
+  return renderHistoryView(drafts, {
+    historyList,
+    currentDraftId,
+    renderHistorySummary,
+    buildHistoryReadiness,
+    getProductionStageLabel,
+    deriveProductionStage,
+    formatDateTime,
+    loadDraft,
   });
 }
 
 function renderHistorySummary(drafts) {
-  if (!historySummary) {
-    return;
-  }
-  if (!drafts.length) {
-    historySummary.innerHTML = "";
-    return;
-  }
-
-  const exported = drafts.filter((draft) => draft.workflowStatus === "exported").length;
-  const blocked = drafts.filter((draft) => draft.exportStatus === "blocked" || draft.blockingIssueCount > 0).length;
-  const pending = drafts.filter((draft) => draft.workflowStatus === "pending" || draft.workflowStatus === "revised").length;
-  const ready = drafts.filter((draft) => draft.workflowStatus === "ready").length;
-  const scriptStageCount = drafts.filter((draft) => (draft.productionStage || deriveProductionStage(draft)) === "script").length;
-  const productionStageCount = drafts.filter((draft) => (draft.productionStage || deriveProductionStage(draft)) === "production").length;
-  const exportStageCount = drafts.filter((draft) => (draft.productionStage || deriveProductionStage(draft)) === "export").length;
-
-  historySummary.innerHTML = [
-    `
-      <article class="history-overview-card">
-        <div class="history-overview-head">
-          <span class="history-overview-kicker">历史概览</span>
-          <strong>${drafts.length} 条草稿</strong>
-        </div>
-        <div class="history-overview-metrics">
-          <div class="history-overview-pill">
-            <span>待推进</span>
-            <strong>${pending} 条</strong>
-          </div>
-          <div class="history-overview-pill">
-            <span>可导出</span>
-            <strong>${ready} 条</strong>
-          </div>
-          <div class="history-overview-pill">
-            <span>有阻塞</span>
-            <strong>${blocked} 条</strong>
-          </div>
-          <div class="history-overview-pill">
-            <span>已导出</span>
-            <strong>${exported} 条</strong>
-          </div>
-        </div>
-        <div class="history-overview-stage">
-          <span class="history-overview-section-label">生产阶段</span>
-          <div class="history-overview-metrics history-overview-metrics-stage">
-            <div class="history-overview-pill">
-              <span>脚本期</span>
-              <strong>${scriptStageCount} 条</strong>
-            </div>
-            <div class="history-overview-pill">
-              <span>试产中</span>
-              <strong>${productionStageCount} 条</strong>
-            </div>
-            <div class="history-overview-pill">
-              <span>已成片</span>
-              <strong>${exportStageCount} 条</strong>
-            </div>
-          </div>
-        </div>
-      </article>
-    `,
-  ].join("");
+  return renderHistorySummaryView(drafts, {
+    historySummary,
+    deriveProductionStage,
+  });
 }
 
 function initHistoryCollapse() {
@@ -2714,11 +3296,7 @@ function applyHistoryCollapse() {
 
 function syncEmptyState(drafts) {
   const hasActiveDraft = Boolean(currentDraftId && currentDraft);
-  appShellEl?.classList.toggle("is-production", hasActiveDraft);
-  setInputDrawerOpen(false);
-  emptyStateEl.classList.toggle("hidden", hasActiveDraft);
-  resultEl.classList.toggle("hidden", !hasActiveDraft);
-  railDrawerToggleBtn?.classList.toggle("hidden", !hasActiveDraft);
+  applyProductionShell(hasActiveDraft);
 
   const lastDraft = drafts[0] || null;
   lastDraftId = lastDraft?.id || "";
@@ -2734,6 +3312,15 @@ function syncEmptyState(drafts) {
     updateSidebarContext(null);
   }
   syncPreviewButton();
+}
+
+function applyProductionShell(enabled) {
+  const active = Boolean(enabled);
+  appShellEl?.classList.toggle("is-production", active);
+  setInputDrawerOpen(false);
+  emptyStateEl?.classList.toggle("hidden", active);
+  resultEl?.classList.toggle("hidden", !active);
+  railDrawerToggleBtn?.classList.toggle("hidden", !active);
 }
 
 function updateSidebarContext(draft) {
@@ -2761,22 +3348,10 @@ function updateSidebarContext(draft) {
     .join("");
 }
 
-function handleRailDrawerToggle() {
-  if (!appShellEl?.classList.contains("is-production")) {
-    return;
-  }
-
-  setInputDrawerOpen(!appShellEl.classList.contains("is-rail-open"));
-}
-
 function setInputDrawerOpen(isOpen) {
   const enabled = Boolean(isOpen && appShellEl?.classList.contains("is-production"));
   appShellEl?.classList.toggle("is-rail-open", enabled);
   railDrawerBackdropEl?.classList.toggle("hidden", !enabled);
-  if (railDrawerToggleBtn) {
-    railDrawerToggleBtn.setAttribute("aria-expanded", String(enabled));
-    railDrawerToggleBtn.querySelector(".rail-drawer-toggle-label").textContent = enabled ? "收起输入" : "编辑输入";
-  }
 }
 
 function handleGlobalKeydown(event) {
@@ -2804,6 +3379,8 @@ function handlePreviewWorkspace() {
 function exitPreviewWorkspace() {
   currentDraft = null;
   currentDraftId = "";
+  persistCurrentDraftId("");
+  syncDraftUrl("");
   draftSnapshot = null;
   storyboardDraftState = [];
   currentStoryboardIndex = 0;
@@ -2815,6 +3392,40 @@ function exitPreviewWorkspace() {
 
 function isPreviewDraft() {
   return currentDraftId === PREVIEW_DRAFT_ID || currentDraft?.id === PREVIEW_DRAFT_ID;
+}
+
+function persistCurrentDraftId(draftId) {
+  try {
+    if (draftId) {
+      window.localStorage.setItem(CURRENT_DRAFT_STORAGE_KEY, draftId);
+    } else {
+      window.localStorage.removeItem(CURRENT_DRAFT_STORAGE_KEY);
+    }
+  } catch {
+    // ignore storage errors
+  }
+}
+
+function getStoredCurrentDraftId() {
+  try {
+    return String(window.localStorage.getItem(CURRENT_DRAFT_STORAGE_KEY) || "");
+  } catch {
+    return "";
+  }
+}
+
+function syncDraftUrl(draftId) {
+  try {
+    const url = new URL(window.location.href);
+    if (draftId && draftId !== PREVIEW_DRAFT_ID) {
+      url.searchParams.set("draft", draftId);
+    } else {
+      url.searchParams.delete("draft");
+    }
+    window.history.replaceState({}, "", url);
+  } catch {
+    // ignore history errors
+  }
 }
 
 function syncPreviewButton() {
@@ -2979,55 +3590,6 @@ async function loadDraft(draftId) {
   }
 }
 
-async function postJson(url, payload) {
-  try {
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const data = await response.json();
-    if (!response.ok) {
-      throw new Error(data.error || "请求失败");
-    }
-    return data;
-  } catch (error) {
-    throw new Error(normalizeRequestError(error));
-  }
-}
-
-async function fetchJson(url) {
-  try {
-    const response = await fetch(url);
-    const data = await response.json();
-    if (!response.ok) {
-      throw new Error(data.error || "请求失败");
-    }
-    return data;
-  } catch (error) {
-    throw new Error(normalizeRequestError(error));
-  }
-}
-
-function normalizeRequestError(error) {
-  const message = String(error?.message || "");
-  const normalized = message.toLowerCase();
-
-  if (message === "timeout" || normalized === "timeout") {
-    return "请求超时，请稍后重试。";
-  }
-
-  if (message.includes("Failed to fetch") || normalized.includes("fetch failed")) {
-    return "本地服务未连接，请刷新页面或重启网站。";
-  }
-
-  if (message.includes("NetworkError")) {
-    return "网络请求失败，请检查本地服务是否正常运行。";
-  }
-
-  return message || "请求失败";
-}
-
 function togglePrimaryActions(disabled) {
   exportBtn.disabled = disabled;
   saveDraftBtn.disabled = disabled || !currentDraftId || !hasUnsavedChanges;
@@ -3141,22 +3703,38 @@ function updateGenerateProgressElapsed() {
   generateProgressElapsedEl.textContent = `已耗时 ${elapsedSec} 秒`;
   if (elapsedSec >= 60) {
     generateProgressEl?.classList.add("generate-progress-slow");
-    generateProgressNoteEl.textContent = "当前链路偏慢，请继续等待，通常不是卡死。";
+    generateProgressNoteEl.textContent = "脚本整理偏慢时请继续等待，通常不是卡死。";
     return;
   }
   generateProgressEl?.classList.remove("generate-progress-slow");
   if (elapsedSec >= 30) {
-    generateProgressNoteEl.textContent = "远程图片和配音生成通常会稍慢一些。";
+    generateProgressNoteEl.textContent = "远程脚本生成较慢时，分段整理会稍后完成。";
     return;
   }
-  generateProgressNoteEl.textContent = "远程模型较慢时通常需要 30 到 90 秒。";
+  generateProgressNoteEl.textContent = "通常只需要先完成脚本生成和节奏整理。";
 }
 
 function handleEditorInput() {
   updateEditorState();
+  if (currentDraft) {
+    setupPreviewImage(currentDraft, buildAssetVersion(currentDraft));
+    renderCoverSafeOverlay();
+  }
+}
+
+function handleJumpCoverEditor() {
+  document.querySelector("#section-script")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  editorGroupCoverEl?.setAttribute("open", "open");
+  window.setTimeout(() => {
+    editCoverTitleEl?.focus();
+  }, 180);
 }
 
 function bindEditorFocus(field, focusKey) {
+  if (!field) {
+    return;
+  }
+
   field.addEventListener("focus", () => {
     currentEditorFocus = focusKey;
     updatePreviewFocusChip();
@@ -3359,13 +3937,21 @@ function handleSuggestTopic(event) {
 }
 
 function handleRandomExample() {
-  const presets = [...suggestTopicButtons];
-  if (!presets.length) {
+  if (!RANDOM_EXAMPLE_PRESETS.length) {
     return;
   }
 
-  const picked = presets[Math.floor(Math.random() * presets.length)];
-  picked.click();
+  const picked = RANDOM_EXAMPLE_PRESETS[Math.floor(Math.random() * RANDOM_EXAMPLE_PRESETS.length)];
+  setSelectedSourceType("topic");
+  topicInputEl.value = picked.topic || "";
+  rawContentEl.value = "";
+  angleInputEl.value = picked.angle || "";
+  rewriteStyleEl.value = picked.rewriteStyle || "industry_observation";
+  if (audienceInputEl) {
+    audienceInputEl.value = picked.audience || "";
+  }
+  updateInputSourceUI();
+  setStatus("已填入示例主题，可以直接开始制片。", "success");
 }
 
 function collectLlmConfig() {
@@ -3532,16 +4118,29 @@ function formatDateTime(value) {
 }
 
 function updatePreviewFocusChip() {
+  if (!previewFocusChip) {
+    return;
+  }
   previewFocusChip.textContent = `当前查看：${currentEditorFocus === "overview" ? currentPreviewReviewLabel : getFocusLabel(currentEditorFocus)}`;
 }
 
 function setupPreviewImage(draft, assetVersion) {
   const previewCanvas = coverEl.closest(".preview-canvas");
+  const previewPath = resolvePreviewCoverPath(draft);
   if (!previewCanvas) {
-    coverEl.src = toVersionedMediaUrl(draft.assets.coverPath, assetVersion);
+    coverEl.src = toVersionedMediaUrl(previewPath || draft.assets.coverPath, assetVersion);
     return;
   }
 
+  if (!previewPath && !draft?.assets?.coverPath) {
+    previewCanvas.classList.add("preview-canvas-empty");
+    coverEl.classList.add("is-hidden");
+    coverEl.removeAttribute("src");
+    return;
+  }
+
+  const liveCompose = Boolean(previewPath && currentDirtyState.cover);
+  previewCanvas.classList.toggle("is-live-compose", liveCompose);
   previewCanvas.classList.remove("preview-canvas-empty");
   coverEl.classList.remove("is-hidden");
   coverEl.onload = () => {
@@ -3552,7 +4151,227 @@ function setupPreviewImage(draft, assetVersion) {
     previewCanvas.classList.add("preview-canvas-empty");
     coverEl.classList.add("is-hidden");
   };
-  coverEl.src = toVersionedMediaUrl(draft.assets.coverPath, assetVersion);
+  coverEl.src = liveCompose
+    ? buildLiveComposedCoverPreviewUrl(draft, assetVersion)
+    : toVersionedMediaUrl(previewPath || draft.assets.coverPath, assetVersion);
+}
+
+function buildLiveComposedCoverPreviewUrl(draft, assetVersion) {
+  const source = getDraftScriptSource(draft);
+  const script = {
+    coverTitle: editCoverTitleEl?.value?.trim() || source.coverTitle || "",
+    coverSubtitle: editCoverSubtitleEl?.value?.trim() || source.coverSubtitle || "",
+    coverTitlePosition: editCoverPositionEl?.value || source.coverTitlePosition || "middle",
+    coverTitleAlign: editCoverAlignEl?.value || source.coverTitleAlign || "left",
+    coverTitleSize: editCoverSizeEl?.value || source.coverTitleSize || "large",
+    coverTitleWidth: editCoverTitleWidthEl?.value || source.coverTitleWidth || "normal",
+    coverTitleOffset: editCoverTitleOffsetEl?.value || String(source.coverTitleOffset ?? "0"),
+    coverTitleXOffset: editCoverTitleXOffsetEl?.value || String(source.coverTitleXOffset ?? "0"),
+    coverTitleSpacing: editCoverTitleSpacingEl?.value || source.coverTitleSpacing || "normal",
+    coverSubtitlePosition: editCoverSubtitlePositionEl?.value || source.coverSubtitlePosition || "below-title",
+    coverSubtitleSize: editCoverSubtitleSizeEl?.value || source.coverSubtitleSize || "small",
+    coverSubtitleAlign: editCoverSubtitleAlignEl?.value || source.coverSubtitleAlign || "follow",
+    coverSubtitleOffset: editCoverSubtitleOffsetEl?.value || String(source.coverSubtitleOffset ?? "0"),
+    coverSubtitleXOffset: editCoverSubtitleXOffsetEl?.value || String(source.coverSubtitleXOffset ?? "0"),
+    coverSubtitleWidth: editCoverSubtitleWidthEl?.value || source.coverSubtitleWidth || "normal",
+  };
+  const backgroundUrl = toVersionedMediaUrl(resolvePreviewCoverPath(draft), assetVersion);
+  const svg = buildLiveCoverPreviewSvg(script, draft?.coverStyle || "report", backgroundUrl);
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
+function buildLiveCoverPreviewSvg(script, coverStyle, backgroundUrl) {
+  const backgroundMarkup = `
+  <image href="${escapeXml(backgroundUrl)}" x="0" y="0" width="1080" height="1920" preserveAspectRatio="xMidYMid slice"/>
+  <rect width="1080" height="1920" fill="#041018" fill-opacity="0.18"/>
+`;
+  return buildCoverComposedSvgDocument({
+    script,
+    coverStyle,
+    backgroundMarkup,
+  });
+}
+
+function resolvePreviewCoverPath(draft) {
+  if (!draft) {
+    return "";
+  }
+
+  if (!currentDirtyState.cover) {
+    return draft.assets?.coverPath || "";
+  }
+
+  const selectedBackground = (draft.coverBackgroundHistory || []).find((item) => item?.selected && item?.backgroundPath);
+  return selectedBackground?.backgroundPath || draft.assets?.coverPath || "";
+}
+
+function renderCoverSafeOverlay() {
+  if (!coverSafeOverlayEl || !coverSafeFrameEl || !coverSafeTitleEl || !coverSafeSubtitleEl) {
+    return;
+  }
+
+  const source = currentDraft ? getDraftScriptSource(currentDraft) : {};
+  const title = editCoverTitleEl?.value?.trim() || source.coverTitle || "";
+  const subtitle = editCoverSubtitleEl?.value?.trim() || source.coverSubtitle || "";
+  const position = editCoverPositionEl?.value || source.coverTitlePosition || "middle";
+  const align = editCoverAlignEl?.value || source.coverTitleAlign || "left";
+  const size = editCoverSizeEl?.value || source.coverTitleSize || "large";
+  const titleWidth = editCoverTitleWidthEl?.value || source.coverTitleWidth || "normal";
+  const titleOffset = editCoverTitleOffsetEl?.value || String(source.coverTitleOffset ?? "0");
+  const titleXOffset = editCoverTitleXOffsetEl?.value || String(source.coverTitleXOffset ?? "0");
+  const titleSpacing = editCoverTitleSpacingEl?.value || source.coverTitleSpacing || "normal";
+  const subtitlePosition = editCoverSubtitlePositionEl?.value || source.coverSubtitlePosition || "below-title";
+  const subtitleSize = editCoverSubtitleSizeEl?.value || source.coverSubtitleSize || "small";
+  const subtitleAlign = editCoverSubtitleAlignEl?.value || source.coverSubtitleAlign || "follow";
+  const subtitleOffset = editCoverSubtitleOffsetEl?.value || String(source.coverSubtitleOffset ?? "0");
+  const subtitleXOffset = editCoverSubtitleXOffsetEl?.value || String(source.coverSubtitleXOffset ?? "0");
+  const subtitleWidth = editCoverSubtitleWidthEl?.value || source.coverSubtitleWidth || "normal";
+  const isLiveCompose = Boolean(currentDirtyState.cover);
+
+  coverSafeOverlayEl.dataset.position = position;
+  coverSafeOverlayEl.dataset.align = align;
+  coverSafeOverlayEl.dataset.size = size;
+  coverSafeOverlayEl.dataset.titleWidth = titleWidth;
+  coverSafeOverlayEl.dataset.titleOffset = titleOffset;
+  coverSafeOverlayEl.dataset.titleXOffset = titleXOffset;
+  coverSafeOverlayEl.dataset.titleSpacing = titleSpacing;
+  coverSafeOverlayEl.dataset.subtitlePosition = subtitlePosition;
+  coverSafeOverlayEl.dataset.subtitleSize = subtitleSize;
+  coverSafeOverlayEl.dataset.subtitleAlign = subtitleAlign === "follow" ? align : subtitleAlign;
+  coverSafeOverlayEl.dataset.subtitleOffset = subtitleOffset;
+  coverSafeOverlayEl.dataset.subtitleXOffset = subtitleXOffset;
+  coverSafeOverlayEl.dataset.subtitleWidth = subtitleWidth;
+  coverSafeOverlayEl.classList.toggle("is-live-compose", isLiveCompose);
+  if (coverSafeKickerEl) {
+    coverSafeKickerEl.textContent = isLiveCompose ? "实时叠字预览" : "标题安全区";
+  }
+  if (isLiveCompose) {
+    coverSafeTitleEl.textContent = "";
+    coverSafeSubtitleEl.textContent = "";
+    coverSafeFrameEl.classList.remove("is-empty");
+  } else {
+    coverSafeTitleEl.textContent = title || "这里会按你的标题设置硬叠主标题";
+    coverSafeSubtitleEl.textContent = subtitlePosition === "hidden"
+      ? ""
+      : (subtitle || "这里会按当前副标题和安全区规则预览叠字位置");
+    coverSafeFrameEl.classList.toggle("is-empty", !title && (!subtitle || subtitlePosition === "hidden"));
+  }
+}
+
+function renderCoverBackgroundHistory(draft, assetVersion) {
+  if (!coverBackgroundHistoryGridEl || !coverBackgroundHistoryMetaEl) {
+    return;
+  }
+
+  const items = Array.isArray(draft?.coverBackgroundHistory) ? draft.coverBackgroundHistory : [];
+  coverBackgroundCompareIds = coverBackgroundCompareIds.filter((id) => items.some((item) => item.id === id)).slice(0, 2);
+  coverBackgroundHistoryMetaEl.textContent = items.length
+    ? `当前保留 ${items.length} 张纯背景候选。这里先挑底图，正式封面仍以上方排版预览为准。`
+    : "每次重抽背景都会保留最近几张纯背景，可随时回切并重新套用当前标题。";
+
+  if (!items.length) {
+    coverBackgroundHistoryGridEl.innerHTML = '<div class="status">还没有背景候选，先点一次“只重抽背景”。</div>';
+    return;
+  }
+
+  coverBackgroundHistoryGridEl.innerHTML = items.map((item, index) => `
+    <article class="cover-background-card${item.selected ? " is-active" : ""}">
+      <img class="cover-background-thumb" src="${toVersionedMediaUrl(item.backgroundPath, assetVersion)}" alt="纯背景版本 ${index + 1}" />
+      <div class="cover-background-card-meta">
+        <strong>${escapeHtml(item.coverStyleLabel || "背景底图")}</strong>
+        <span>${item.starred ? "已收藏 · " : ""}${item.selected ? "当前使用中" : formatDateTime(item.createdAt)}</span>
+      </div>
+      <div class="cover-background-card-actions">
+        <button type="button" class="switch-btn" data-cover-background-id="${escapeHtml(item.id)}" ${item.selected ? "disabled" : ""}>${item.selected ? "当前背景" : "设为当前背景"}</button>
+        <button type="button" class="switch-btn" data-cover-background-compare-id="${escapeHtml(item.id)}">${coverBackgroundCompareIds.includes(item.id) ? "已加入对比" : "加入对比"}</button>
+        <button type="button" class="switch-btn" data-cover-background-star-id="${escapeHtml(item.id)}">${item.starred ? "取消收藏" : "收藏背景"}</button>
+      </div>
+    </article>
+  `).join("");
+
+  coverBackgroundHistoryGridEl.querySelectorAll("[data-cover-background-id]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      await handleSelectCoverBackground(button.dataset.coverBackgroundId);
+    });
+  });
+  coverBackgroundHistoryGridEl.querySelectorAll("[data-cover-background-compare-id]").forEach((button) => {
+    button.addEventListener("click", () => {
+      toggleCoverBackgroundCompare(button.dataset.coverBackgroundCompareId);
+      renderCoverBackgroundHistory(currentDraft, buildAssetVersion(currentDraft));
+      renderCoverBackgroundCompare(currentDraft, buildAssetVersion(currentDraft));
+    });
+  });
+  coverBackgroundHistoryGridEl.querySelectorAll("[data-cover-background-star-id]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const item = items.find((entry) => entry.id === button.dataset.coverBackgroundStarId);
+      await handleToggleCoverBackgroundStar(button.dataset.coverBackgroundStarId, !item?.starred);
+    });
+  });
+}
+
+function toggleCoverBackgroundCompare(backgroundId) {
+  if (!backgroundId) {
+    return;
+  }
+
+  if (coverBackgroundCompareIds.includes(backgroundId)) {
+    coverBackgroundCompareIds = coverBackgroundCompareIds.filter((id) => id !== backgroundId);
+    return;
+  }
+
+  coverBackgroundCompareIds = [...coverBackgroundCompareIds, backgroundId].slice(-2);
+}
+
+function renderCoverBackgroundCompare(draft, assetVersion) {
+  if (!coverBackgroundCompareEl || !coverBackgroundCompareGridEl || !coverBackgroundCompareMetaEl) {
+    return;
+  }
+
+  const items = Array.isArray(draft?.coverBackgroundHistory) ? draft.coverBackgroundHistory : [];
+  const compareItems = coverBackgroundCompareIds
+    .map((id) => items.find((item) => item.id === id))
+    .filter(Boolean);
+
+  coverBackgroundCompareEl.classList.toggle("hidden", compareItems.length < 2);
+  if (compareItems.length < 2) {
+    coverBackgroundCompareGridEl.innerHTML = "";
+    return;
+  }
+
+  coverBackgroundCompareMetaEl.textContent = "这里对比的是纯背景。选中后只会切换底图，当前标题排版会原样保留在上方正式预览里。";
+  coverBackgroundCompareGridEl.innerHTML = compareItems.map((item, index) => `
+    <article class="cover-background-compare-card">
+      <img class="cover-background-thumb" src="${toVersionedMediaUrl(item.backgroundPath, assetVersion)}" alt="对比背景 ${index + 1}" />
+      <div class="cover-background-card-meta">
+        <strong>${escapeHtml(item.coverStyleLabel || `背景 ${index + 1}`)}</strong>
+        <span>${item.starred ? "已收藏 · " : ""}${item.selected ? "当前使用中" : formatDateTime(item.createdAt)}</span>
+      </div>
+      <div class="cover-background-compare-actions">
+        <button type="button" class="switch-btn" data-cover-background-id="${escapeHtml(item.id)}" ${item.selected ? "disabled" : ""}>${item.selected ? "当前背景" : "设为当前背景"}</button>
+        <button type="button" class="switch-btn" data-cover-background-star-id="${escapeHtml(item.id)}">${item.starred ? "取消收藏" : "收藏背景"}</button>
+        <button type="button" class="switch-btn" data-cover-background-remove-id="${escapeHtml(item.id)}">移出对比</button>
+      </div>
+    </article>
+  `).join("");
+
+  coverBackgroundCompareGridEl.querySelectorAll("[data-cover-background-id]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      await handleSelectCoverBackground(button.dataset.coverBackgroundId);
+    });
+  });
+  coverBackgroundCompareGridEl.querySelectorAll("[data-cover-background-star-id]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const item = compareItems.find((entry) => entry.id === button.dataset.coverBackgroundStarId);
+      await handleToggleCoverBackgroundStar(button.dataset.coverBackgroundStarId, !item?.starred);
+    });
+  });
+  coverBackgroundCompareGridEl.querySelectorAll("[data-cover-background-remove-id]").forEach((button) => {
+    button.addEventListener("click", () => {
+      coverBackgroundCompareIds = coverBackgroundCompareIds.filter((id) => id !== button.dataset.coverBackgroundRemoveId);
+      renderCoverBackgroundHistory(currentDraft, buildAssetVersion(currentDraft));
+      renderCoverBackgroundCompare(currentDraft, buildAssetVersion(currentDraft));
+    });
+  });
 }
 
 function buildAssetVersion(draft) {
@@ -3597,7 +4416,16 @@ function highlightActiveHistoryItem() {
 }
 
 async function bootstrapInitialDraftFromUrl() {
-  const draftId = new URL(window.location.href).searchParams.get("draft");
+  const url = new URL(window.location.href);
+  if (url.searchParams.get("front") === "1") {
+    persistCurrentDraftId("");
+    currentDraft = null;
+    currentDraftId = "";
+    applyProductionShell(false);
+    return;
+  }
+
+  const draftId = url.searchParams.get("draft") || getStoredCurrentDraftId() || lastDraftId;
   if (!draftId) {
     return;
   }
@@ -3627,15 +4455,37 @@ async function copyText(text) {
 function getEditorPayload() {
   return {
     titleVariantA: editTitleAEl.value.trim(),
-    titleVariantB: editTitleBEl.value.trim(),
+    titleVariantB: editTitleBEl?.value?.trim() || editTitleAEl.value.trim(),
     coverTitle: editCoverTitleEl.value.trim(),
-    coverSubtitle: editCoverSubtitleEl.value.trim(),
+    coverSubtitle: editCoverSubtitleEl?.value?.trim() || "",
+    coverVisualPrompt: editCoverVisualPromptEl?.value?.trim() || "",
+    coverNegativePrompt: editCoverNegativePromptEl?.value?.trim() || "",
+    coverTitlePosition: editCoverPositionEl?.value || "middle",
+    coverTitleAlign: editCoverAlignEl?.value || "left",
+    coverTitleSize: editCoverSizeEl?.value || "large",
+    coverTitleWidth: editCoverTitleWidthEl?.value || "normal",
+    coverTitleOffset: editCoverTitleOffsetEl?.value || "0",
+    coverTitleSpacing: editCoverTitleSpacingEl?.value || "normal",
+    coverSubtitlePosition: editCoverSubtitlePositionEl?.value || "below-title",
+    coverSubtitleSize: editCoverSubtitleSizeEl?.value || "small",
+    coverSubtitleAlign: editCoverSubtitleAlignEl?.value || "follow",
+    coverSubtitleOffset: editCoverSubtitleOffsetEl?.value || "0",
+    coverSubtitleWidth: editCoverSubtitleWidthEl?.value || "normal",
     hook: editHookEl.value.trim(),
     sections: [editSection1El.value.trim(), editSection2El.value.trim(), editSection3El.value.trim()],
     cta: editCtaEl.value.trim(),
     durationMode: String(durationModeEl.value || ""),
     storyboard: collectStoryboardPayload(),
   };
+}
+
+function flushSavedEditorState(draft) {
+  syncDraftSnapshotFromDraft(draft);
+  resetEditorDirtyState();
+  window.requestAnimationFrame(() => {
+    syncDraftSnapshotFromDraft(currentDraft || draft);
+    resetEditorDirtyState();
+  });
 }
 
 function collectStoryboardPayload() {
@@ -3673,10 +4523,6 @@ function updateStoryboardField(field) {
   }
 }
 
-function cloneStoryboard(storyboard) {
-  return (storyboard || []).map((scene) => ({ ...scene }));
-}
-
 function clampStoryboardIndex(index, length) {
   if (!length) {
     return 0;
@@ -3691,6 +4537,36 @@ function syncDraftSnapshot() {
   updateEditorState();
 }
 
+function syncDraftSnapshotFromDraft(draft) {
+  draftSnapshot = JSON.stringify(buildEditorSnapshotPayload({
+    draft,
+    durationModeValue: durationModeEl.value,
+    getDraftScriptSource,
+  }));
+  hasUnsavedChanges = false;
+}
+
+function resetEditorDirtyState() {
+  hasUnsavedChanges = false;
+  currentDirtyState = {
+    script: false,
+    audio: false,
+    storyboard: false,
+    cover: false,
+  };
+  saveDraftBtn.textContent = "当前已保存";
+  saveDraftBtn.disabled = true;
+  editorStateEl.textContent = "当前内容已同步。";
+  editorStateEl.className = "editor-state editor-state-synced";
+  editableFields.forEach((field) => field.classList.remove("field-dirty"));
+  updateEditorGroupStatus({
+    title: false,
+    cover: false,
+    body: false,
+    cta: false,
+  });
+}
+
 function updateEditorState() {
   if (!currentDraftId || !draftSnapshot) {
     hasUnsavedChanges = false;
@@ -3700,7 +4576,7 @@ function updateEditorState() {
       storyboard: false,
       cover: false,
     };
-    saveDraftBtn.textContent = "保存文案并执行轻量试产";
+    saveDraftBtn.textContent = "保存这轮文案修订";
     saveDraftBtn.disabled = !currentDraftId;
     editorStateEl.textContent = "当前内容已同步。";
     editorStateEl.className = "editor-state editor-state-synced";
@@ -3718,49 +4594,45 @@ function updateEditorState() {
   const currentPayload = getEditorPayload();
   const snapshot = JSON.parse(draftSnapshot);
 
-  hasUnsavedChanges = JSON.stringify(currentPayload) !== draftSnapshot;
-  saveDraftBtn.textContent = hasUnsavedChanges ? "保存修改并执行轻量试产" : "当前已保存";
-  saveDraftBtn.disabled = !hasUnsavedChanges;
-  editorStateEl.textContent = hasUnsavedChanges ? "你有未保存的修改。" : "当前内容已同步。";
-  editorStateEl.className = hasUnsavedChanges ? "editor-state editor-state-dirty" : "editor-state editor-state-synced";
+  const dirtyState = buildEditorDirtyState(currentPayload, snapshot);
+  hasUnsavedChanges = dirtyState.hasUnsavedChanges;
+  saveDraftBtn.textContent = dirtyState.hasEditorUnsavedChanges ? "保存这轮文案修订" : "当前已保存";
+  saveDraftBtn.disabled = !dirtyState.hasEditorUnsavedChanges;
+  editorStateEl.textContent = dirtyState.hasEditorUnsavedChanges ? "你有未保存的修改。" : "当前内容已同步。";
+  editorStateEl.className = dirtyState.hasEditorUnsavedChanges ? "editor-state editor-state-dirty" : "editor-state editor-state-synced";
 
-  editableFields.forEach((field) => {
-    const key = getFieldKey(field);
-    const currentValue = key === "sections"
-      ? ""
-      : String(currentPayload[key] ?? "");
-    const snapshotValue = key === "sections"
-      ? ""
-      : String(snapshot[key] ?? "");
-    field.classList.toggle("field-dirty", currentValue !== snapshotValue);
-  });
-
-  [editSection1El, editSection2El, editSection3El].forEach((field, index) => {
-    field.classList.toggle("field-dirty", currentPayload.sections[index] !== snapshot.sections[index]);
-  });
-
-  const titleDirty = currentPayload.titleVariantA !== snapshot.titleVariantA || currentPayload.titleVariantB !== snapshot.titleVariantB;
-  const coverDirty = currentPayload.coverTitle !== snapshot.coverTitle || currentPayload.coverSubtitle !== snapshot.coverSubtitle;
-  const bodyDirty =
-    currentPayload.hook !== snapshot.hook ||
-    currentPayload.sections[0] !== snapshot.sections[0] ||
-    currentPayload.sections[1] !== snapshot.sections[1] ||
-    currentPayload.sections[2] !== snapshot.sections[2];
-  const ctaDirty = currentPayload.cta !== snapshot.cta;
-  const storyboardDirty = JSON.stringify(currentPayload.storyboard || []) !== JSON.stringify(snapshot.storyboard || []);
+  editTitleAEl?.classList.toggle("field-dirty", dirtyState.titleDirty);
+  editCoverTitleEl?.classList.toggle("field-dirty", dirtyState.coverDirty);
+  editCoverSubtitleEl?.classList.toggle("field-dirty", dirtyState.coverDirty);
+  editCoverVisualPromptEl?.classList.toggle("field-dirty", dirtyState.coverDirty);
+  editCoverNegativePromptEl?.classList.toggle("field-dirty", dirtyState.coverDirty);
+  editCoverTitleWidthEl?.classList.toggle("field-dirty", dirtyState.coverDirty);
+  editCoverTitleOffsetEl?.classList.toggle("field-dirty", dirtyState.coverDirty);
+  editCoverTitleSpacingEl?.classList.toggle("field-dirty", dirtyState.coverDirty);
+  editCoverSubtitlePositionEl?.classList.toggle("field-dirty", dirtyState.coverDirty);
+  editCoverSubtitleSizeEl?.classList.toggle("field-dirty", dirtyState.coverDirty);
+  editCoverSubtitleAlignEl?.classList.toggle("field-dirty", dirtyState.coverDirty);
+  editCoverSubtitleOffsetEl?.classList.toggle("field-dirty", dirtyState.coverDirty);
+  editCoverSubtitleWidthEl?.classList.toggle("field-dirty", dirtyState.coverDirty);
+  editHookEl?.classList.toggle("field-dirty", currentPayload.hook !== snapshot.hook);
+  editSection1El?.classList.toggle("field-dirty", currentPayload.sections[0] !== snapshot.sections[0]);
+  editSection2El?.classList.toggle("field-dirty", currentPayload.sections[1] !== snapshot.sections[1]);
+  editSection3El?.classList.toggle("field-dirty", currentPayload.sections[2] !== snapshot.sections[2]);
+  editCtaEl?.classList.toggle("field-dirty", dirtyState.ctaDirty);
+  durationModeEl?.classList.toggle("field-dirty", dirtyState.durationDirty);
 
   currentDirtyState = {
-    script: titleDirty || bodyDirty || ctaDirty,
-    audio: bodyDirty || ctaDirty || currentPayload.durationMode !== snapshot.durationMode,
-    storyboard: storyboardDirty,
-    cover: coverDirty,
+    script: dirtyState.titleDirty || dirtyState.bodyDirty || dirtyState.ctaDirty,
+    audio: dirtyState.bodyDirty || dirtyState.ctaDirty || dirtyState.durationDirty,
+    storyboard: dirtyState.storyboardDirty,
+    cover: dirtyState.coverDirty,
   };
 
   updateEditorGroupStatus({
-    title: titleDirty,
-    cover: coverDirty,
-    body: bodyDirty,
-    cta: ctaDirty,
+    title: dirtyState.titleDirty,
+    cover: dirtyState.coverDirty,
+    body: dirtyState.bodyDirty,
+    cta: dirtyState.ctaDirty,
   });
   renderWorkflowMap(currentDraft);
 }
@@ -3784,12 +4656,12 @@ function getFieldKey(field) {
   switch (field) {
     case editTitleAEl:
       return "titleVariantA";
-    case editTitleBEl:
-      return "titleVariantB";
     case editCoverTitleEl:
       return "coverTitle";
-    case editCoverSubtitleEl:
-      return "coverSubtitle";
+    case editCoverVisualPromptEl:
+      return "coverVisualPrompt";
+    case editCoverNegativePromptEl:
+      return "coverNegativePrompt";
     case editHookEl:
       return "hook";
     case editCtaEl:
@@ -3897,27 +4769,7 @@ function getCheckboxValue(id) {
 }
 
 function buildHistoryReadiness(draft) {
-  if (draft.workflowStatus === "exported") {
-    return "已完成导出";
-  }
-
-  if (draft.workflowStatus === "ready") {
-    return "已就绪，可直接导出";
-  }
-
-  if (draft.blockingIssueCount > 0) {
-    return "先处理阻塞问题";
-  }
-
-  if (draft.exportStatus === "script-only") {
-    return "可先执行导出脚本";
-  }
-
-  if (draft.qualityCheckCount > 0) {
-    return "已检查，可继续导出";
-  }
-
-  return "建议先运行质检";
+  return buildHistoryReadinessView(draft);
 }
 
 function debounce(fn, wait) {
