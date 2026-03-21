@@ -167,10 +167,13 @@ export async function createDraft(input) {
     script: scriptPayload,
     storyboard: [],
     timeline: [],
+    materialType: "static_asset",
     narrationText,
     estimatedDurationSec,
     subtitleEntries: [],
     qualityChecks: [],
+    sceneReviews: [],
+    sceneRepairs: [],
     exportInfo: {
       status: "idle",
       title: "还没有导出记录",
@@ -198,6 +201,7 @@ export async function exportDraft(draftId) {
 
   const { draft, draftDir } = await loadPersistedDraft(draftId);
   const checkResult = await checkDraftQuality(draftId);
+  const sceneAssetReport = checkResult.sceneAssetReport || buildSceneAssetReport(draft.storyboard || []);
   const hasBlockingError = checkResult.checks.some((item) => item.level === "error");
 
   if (hasBlockingError) {
@@ -208,6 +212,7 @@ export async function exportDraft(draftId) {
       attemptedAt: new Date().toISOString(),
       scriptReady: false,
       videoReady: false,
+      sceneAssetReport,
     };
     touchDraft(draft);
     await persistDraft(draftId, draft);
@@ -216,6 +221,7 @@ export async function exportDraft(draftId) {
       blocked: true,
       message: "导出前质检未通过，请先处理错误项。",
       checks: checkResult.checks,
+      sceneAssetReport,
       outputVideoPath: draft.assets.outputVideoPath,
       exportScriptPath: draft.assets.exportScriptPath,
       exportInfo: draft.exportInfo,
@@ -263,6 +269,7 @@ export async function exportDraft(draftId) {
     attemptedAt: new Date().toISOString(),
     scriptReady: true,
     videoReady: exported,
+    sceneAssetReport,
   };
   touchDraft(draft);
 
@@ -273,6 +280,7 @@ export async function exportDraft(draftId) {
     blocked: false,
     message,
     checks: checkResult.checks,
+    sceneAssetReport,
     outputVideoPath: draft.assets.outputVideoPath,
     exportScriptPath: draft.assets.exportScriptPath,
     exportInfo: draft.exportInfo,
@@ -498,7 +506,9 @@ export async function updateDraftContent(input) {
     angle: draft.angle,
     audience: draft.audience,
     coverPath: draft.assets?.coverPath || "",
+    sceneGenerationMode: "static",
   });
+  syncDraftMaterialType(draft);
   touchDraft(draft);
   draft.workflowStatus = "revised";
   draft.workflowStatusLabel = getWorkflowStatusLabel("revised");
@@ -511,6 +521,7 @@ export async function updateDraftContent(input) {
   const effectiveDurationSec = voiceTrack.durationSec || draft.subtitleEntries[draft.subtitleEntries.length - 1]?.endSec || draft.durationMode;
   draft.estimatedDurationSec = effectiveDurationSec;
   draft.storyboard = retimeStoryboardDurations(draft.storyboard, draft.durationMode, effectiveDurationSec);
+  syncDraftMaterialType(draft);
   draft.timeline = buildTimelineFromStoryboard(draft.storyboard, draft.assets?.coverPath || "");
 
   const subtitlePath = path.join(rootDir, draft.assets.subtitlePath);
@@ -545,6 +556,7 @@ export async function syncDraftAudio(input) {
   draft.storyboard = Array.isArray(input?.content?.storyboard) && input.content.storyboard.length
     ? normalizeStoryboardInput(input.content.storyboard, draft)
     : normalizeStoryboardInput(draft.storyboard, draft);
+  syncDraftMaterialType(draft);
   touchDraft(draft);
   draft.workflowStatus = "revised";
   draft.workflowStatusLabel = getWorkflowStatusLabel("revised");
@@ -557,6 +569,7 @@ export async function syncDraftAudio(input) {
   const effectiveDurationSec = voiceTrack.durationSec || draft.subtitleEntries[draft.subtitleEntries.length - 1]?.endSec || draft.durationMode;
   draft.estimatedDurationSec = effectiveDurationSec;
   draft.storyboard = retimeStoryboardDurations(draft.storyboard, draft.durationMode, effectiveDurationSec);
+  syncDraftMaterialType(draft);
   draft.timeline = buildTimelineFromStoryboard(draft.storyboard, draft.assets?.coverPath || "");
 
   const subtitlePath = path.join(rootDir, draft.assets.subtitlePath);
@@ -581,6 +594,7 @@ export async function syncDraftCover(input) {
   draft.storyboard = Array.isArray(input?.content?.storyboard) && input.content.storyboard.length
     ? normalizeStoryboardInput(input.content.storyboard, draft)
     : normalizeStoryboardInput(draft.storyboard, draft);
+  syncDraftMaterialType(draft);
   touchDraft(draft);
   draft.workflowStatus = "revised";
   draft.workflowStatusLabel = getWorkflowStatusLabel("revised");
@@ -621,6 +635,7 @@ export async function syncDraftCover(input) {
   }
 
   draft.storyboard = refreshStoryboardCoverAsset(draft.storyboard, draft.assets.coverPath);
+  syncDraftMaterialType(draft);
   draft.timeline = buildTimelineFromStoryboard(draft.storyboard, draft.assets.coverPath || "");
 
   if (draft.productionStage !== "export") {
@@ -630,6 +645,47 @@ export async function syncDraftCover(input) {
   await persistDraft(draftId, draft, { writeTimeline: true });
 
   return { draft };
+}
+
+export async function runDynamicTrial(input) {
+  const draftId = String(input?.draftId || "").trim();
+  assertPersistedDraftId(draftId);
+
+  const { draft, draftDir } = await loadPersistedDraft(draftId);
+  applyDraftContentChanges(draft, input?.content || {});
+  draft.storyboard = Array.isArray(input?.content?.storyboard) && input.content.storyboard.length
+    ? normalizeStoryboardInput(input.content.storyboard, draft)
+    : normalizeStoryboardInput(draft.storyboard, draft);
+  draft.storyboard = await generateStoryboardAssets(draftDir, draft.storyboard, {
+    topic: draft.topic,
+    angle: draft.angle,
+    audience: draft.audience,
+    coverPath: draft.assets?.coverPath || "",
+    coverTitle: draft.coverTitle || draft.script?.coverTitle || "",
+    coverSubtitle: draft.coverSubtitle || draft.script?.coverSubtitle || "",
+    sceneGenerationMode: "dynamic",
+  });
+  syncDraftMaterialType(draft);
+  touchDraft(draft);
+  draft.workflowStatus = "revised";
+  draft.workflowStatusLabel = getWorkflowStatusLabel("revised");
+  if (draft.productionStage !== "export") {
+    draft.productionStage = "production";
+  }
+  draft.timeline = buildTimelineFromStoryboard(draft.storyboard, draft.assets?.coverPath || "");
+
+  await persistDraft(draftId, draft, { writeTimeline: true });
+  await logRuntimeEvent("info", "dynamic_trial_completed", {
+    draftId,
+    storyboardLength: draft.storyboard.length,
+    dynamicSceneCount: draft.storyboard.filter((scene) => Boolean(scene?.videoPath)).length,
+    materialType: draft.materialType,
+  });
+
+  return {
+    draft,
+    trialMode: "dynamic",
+  };
 }
 
 export async function selectDraftCoverBackground(input) {
@@ -844,6 +900,20 @@ export async function updateDraftMeta(input) {
 }
 
 export async function regenerateDraftScene(input) {
+  return regenerateDraftSceneInternal(input, {
+    sceneGenerationMode: String(input?.sceneGenerationMode || "").trim() || "auto",
+    eventName: "scene_regenerated",
+  });
+}
+
+export async function regenerateDraftDynamicScene(input) {
+  return regenerateDraftSceneInternal(input, {
+    sceneGenerationMode: "dynamic",
+    eventName: "dynamic_scene_regenerated",
+  });
+}
+
+async function regenerateDraftSceneInternal(input, options = {}) {
   const draftId = String(input?.draftId || "").trim();
   const sceneId = String(input?.sceneId || "").trim();
 
@@ -862,23 +932,109 @@ export async function regenerateDraftScene(input) {
   const currentScene = draft.storyboard[sceneIndex];
   const scenesDir = path.join(draftDir, "scenes");
   await fs.mkdir(scenesDir, { recursive: true });
-  const asset = await generateSceneAsset(scenesDir, currentScene, {
-    topic: draft.topic,
-    angle: draft.angle,
-    audience: draft.audience,
-    coverPath: draft.assets?.coverPath || "",
+  const preReview = await buildSceneReview(draft, currentScene, {
+    phase: "pre_repair",
+    durationMode: draft.durationMode,
   });
+  draft.sceneReviews = appendDraftHistoryEntry(draft.sceneReviews, preReview);
 
+  const repairPlan = await dispatchSceneRepair(draft, currentScene, draftDir, {
+    review: preReview,
+    sceneGenerationMode: options.sceneGenerationMode || "auto",
+  });
+  const preparedScene = {
+    ...repairPlan.nextScene,
+    videoScene: normalizeVideoSceneState(repairPlan.nextScene?.videoScene || currentScene.videoScene, repairPlan.nextScene, {
+      coverPath: draft.assets?.coverPath || "",
+      angle: draft.angle,
+    }),
+  };
   draft.storyboard[sceneIndex] = {
-    ...currentScene,
+    ...preparedScene,
+    materialType: normalizeMaterialType(preparedScene.materialType || deriveSceneMaterialType(preparedScene)),
+  };
+
+  let asset;
+  try {
+    asset = await generateSceneAsset(scenesDir, preparedScene, {
+      topic: draft.topic,
+      angle: draft.angle,
+      audience: draft.audience,
+      coverPath: draft.assets?.coverPath || "",
+      coverTitle: draft.coverTitle || draft.script?.coverTitle || "",
+      coverSubtitle: draft.coverSubtitle || draft.script?.coverSubtitle || "",
+      sceneGenerationMode: repairPlan.nextSceneGenerationMode || options.sceneGenerationMode || "auto",
+    });
+  } catch (error) {
+    draft.sceneRepairs = appendDraftHistoryEntry(draft.sceneRepairs, {
+      repairId: buildTraceId("scnrpr"),
+      createdAt: new Date().toISOString(),
+      sceneId,
+      trigger: "scene_regenerate",
+      mode: repairPlan.nextSceneGenerationMode || options.sceneGenerationMode || "auto",
+      sourceReviewId: preReview.reviewId,
+      resultReviewId: "",
+      beforeScore: preReview.score,
+      afterScore: preReview.score,
+      status: "failed",
+      actions: repairPlan.actions,
+      subtitlesRetimed: repairPlan.subtitlesRetimed,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    touchDraft(draft);
+    await persistDraft(draftId, draft, { writeTimeline: true });
+    throw error;
+  }
+
+  const nextScene = {
+    ...preparedScene,
     assetPath: asset.assetPath,
     assetType: asset.assetType,
-    assetPrompt: asset.assetPrompt || currentScene.visualPrompt || "",
+    assetPrompt: asset.assetPrompt || preparedScene.visualPrompt || "",
+    videoPath: asset.videoPath || "",
+    videoType: asset.videoType || "",
+    videoScene: asset.videoScene || buildDefaultVideoSceneState(preparedScene, {
+      coverPath: draft.assets?.coverPath || "",
+    }),
   };
+  draft.storyboard[sceneIndex] = {
+    ...nextScene,
+    materialType: deriveSceneMaterialType(nextScene),
+  };
+  const postReview = await buildSceneReview(draft, draft.storyboard[sceneIndex], {
+    phase: repairPlan.actions.length ? "post_repair" : "post_regenerate",
+    durationMode: draft.durationMode,
+  });
+  draft.sceneReviews = appendDraftHistoryEntry(draft.sceneReviews, postReview);
+  draft.sceneRepairs = appendDraftHistoryEntry(draft.sceneRepairs, {
+    repairId: buildTraceId("scnrpr"),
+    createdAt: new Date().toISOString(),
+    sceneId,
+    trigger: "scene_regenerate",
+    mode: repairPlan.nextSceneGenerationMode || options.sceneGenerationMode || "auto",
+    sourceReviewId: preReview.reviewId,
+    resultReviewId: postReview.reviewId,
+    beforeScore: preReview.score,
+    afterScore: postReview.score,
+    status: repairPlan.actions.length ? "repaired" : "skipped",
+    actions: repairPlan.actions,
+    subtitlesRetimed: repairPlan.subtitlesRetimed,
+    error: "",
+  });
+  syncDraftMaterialType(draft);
   draft.timeline = buildTimelineFromStoryboard(draft.storyboard, draft.assets?.coverPath || "");
   touchDraft(draft);
 
   await persistDraft(draftId, draft, { writeTimeline: true });
+  await logRuntimeEvent("info", options.eventName || "scene_regenerated", {
+    draftId,
+    sceneId,
+    sceneGenerationMode: repairPlan.nextSceneGenerationMode || options.sceneGenerationMode || "auto",
+    materialType: draft.storyboard[sceneIndex]?.materialType || "",
+    reviewScoreBefore: preReview.score,
+    reviewScoreAfter: postReview.score,
+    repairActions: repairPlan.actions.map((item) => item.type).join(","),
+  });
 
   return { draft };
 }
@@ -919,6 +1075,16 @@ export async function checkDraftQuality(draftId) {
     checks.push({ level: "error", label: "字幕缺失", detail: "当前草稿缺少字幕文件，请重新保存草稿。" });
   }
 
+  const sceneAssetReport = buildSceneAssetReport(draft.storyboard || []);
+  const missingSceneAssets = sceneAssetReport.scenes.filter((scene) => scene.assetMode === "missing");
+  if (missingSceneAssets.length) {
+    checks.push({
+      level: "warning",
+      label: "镜头素材存在缺口",
+      detail: `有 ${missingSceneAssets.length} 个 scene 没有可用动态视频或静态图素材，导出时会回退成占位镜头。`,
+    });
+  }
+
   if (!(await hasFfmpeg())) {
     checks.push({ level: "warning", label: "未检测到 ffmpeg", detail: "可生成导出脚本，但无法直接在网页里完成导出。" });
   }
@@ -935,7 +1101,7 @@ export async function checkDraftQuality(draftId) {
   touchDraft(draft);
   await persistDraft(draftId, draft);
 
-  return { draft, checks };
+  return { draft, checks, sceneAssetReport };
 }
 
 function buildMedicalModerationGuidanceChecks(route) {
@@ -970,26 +1136,28 @@ export async function getRuntimeStatus() {
   const config = await getLlmConfig();
   const scriptRoute = await resolveLlmRouteConfig("script", config);
   const storyboardRoute = await resolveLlmRouteConfig("storyboard", config);
+  const videoSceneRoute = await resolveLlmRouteConfig("video_scene", config);
   const imageRoute = await resolveLlmRouteConfig("image", config);
   const ttsRoute = await resolveLlmRouteConfig("tts", config);
   const transcriptionRoute = await resolveLlmRouteConfig("transcription", config);
   const moderationRoute = await resolveLlmRouteConfig("moderation", config);
   const runtimeEnvironment = detectRuntimeEnvironment();
-  const validation = validateLlmConfig(config, { scriptRoute, storyboardRoute, imageRoute, ttsRoute, transcriptionRoute, moderationRoute });
+  const validation = validateLlmConfig(config, { scriptRoute, storyboardRoute, videoSceneRoute, imageRoute, ttsRoute, transcriptionRoute, moderationRoute });
   return {
     runtime: {
       textModel: scriptRoute.model || "-",
       storyboardModel: storyboardRoute.model || scriptRoute.model || "未单独配置",
+      videoSceneModel: videoSceneRoute.model || "-",
       imageModel: imageRoute.model || "-",
       ttsModel: ttsRoute.model || "-",
       transcriptionModel: transcriptionRoute.model || "-",
       moderationModel: moderationRoute.serviceName || moderationRoute.model || "-",
-      apiKeyConfigured: Boolean(scriptRoute.apiKey || storyboardRoute.apiKey || imageRoute.apiKey || ttsRoute.apiKey || transcriptionRoute.apiKey || moderationRoute.apiKey),
+      apiKeyConfigured: Boolean(scriptRoute.apiKey || storyboardRoute.apiKey || videoSceneRoute.apiKey || imageRoute.apiKey || ttsRoute.apiKey || transcriptionRoute.apiKey || moderationRoute.apiKey),
       ffmpegInstalled: await hasFfmpeg(),
       localVoice: envValue("LOCAL_TTS_VOICE", "Ting-Ting"),
-      mode: isLlmRouteEnabled(scriptRoute) || isLlmRouteEnabled(storyboardRoute) || isLlmRouteEnabled(imageRoute) || isLlmRouteEnabled(ttsRoute) || isLlmRouteEnabled(transcriptionRoute) ? "api" : "local-fallback",
+      mode: isLlmRouteEnabled(scriptRoute) || isLlmRouteEnabled(storyboardRoute) || isLlmRouteEnabled(videoSceneRoute) || isLlmRouteEnabled(imageRoute) || isLlmRouteEnabled(ttsRoute) || isLlmRouteEnabled(transcriptionRoute) ? "api" : "local-fallback",
       runtimeEnvironment,
-      llm: buildRuntimeLlmSummary(config, { scriptRoute, storyboardRoute, imageRoute, ttsRoute, transcriptionRoute, moderationRoute }),
+      llm: buildRuntimeLlmSummary(config, { scriptRoute, storyboardRoute, videoSceneRoute, imageRoute, ttsRoute, transcriptionRoute, moderationRoute }),
       llmValidation: validation,
     },
   };
@@ -2134,13 +2302,29 @@ function sanitizeStoryboard(parsed, draft) {
       : [];
 
   const normalized = sourceScenes
-    .map((scene, index) => ({
-      id: `scene-${index + 1}`,
-      sceneTitle: String(scene?.sceneTitle || scene?.title || fallback[index]?.sceneTitle || `镜头 ${index + 1}`).trim(),
-      voiceover: String(scene?.voiceover || fallback[index]?.voiceover || "").trim(),
-      visualType: normalizeSceneVisualType(scene?.visualType || fallback[index]?.visualType || "image"),
-      visualPrompt: String(scene?.visualPrompt || fallback[index]?.visualPrompt || "").trim(),
-    }))
+    .map((scene, index) => {
+      const fallbackScene = fallback[index] || {};
+      const visualType = normalizeSceneVisualType(scene?.visualType || fallbackScene?.visualType || "image");
+      const normalizedScene = {
+        ...scene,
+        ...normalizeSceneSchema(scene, draft, fallbackScene),
+        id: `scene-${index + 1}`,
+        sceneTitle: String(scene?.sceneTitle || scene?.title || fallbackScene?.sceneTitle || `镜头 ${index + 1}`).trim(),
+        voiceover: String(scene?.voiceover || fallbackScene?.voiceover || "").trim(),
+        visualType,
+        visualPrompt: String(scene?.visualPrompt || fallbackScene?.visualPrompt || "").trim(),
+        videoPath: String(scene?.videoPath || fallbackScene?.videoPath || "").trim(),
+        videoType: String(scene?.videoType || fallbackScene?.videoType || "").trim(),
+        materialType: normalizeMaterialType(scene?.materialType || fallbackScene?.materialType || deriveSceneMaterialType(scene)),
+      };
+      return {
+        ...normalizedScene,
+        videoScene: normalizeVideoSceneState(scene?.videoScene, normalizedScene, {
+          coverPath: draft?.assets?.coverPath || "",
+          angle: draft?.angle || "",
+        }),
+      };
+    })
     .filter((scene) => scene.voiceover);
 
   if (!normalized.length) {
@@ -2214,6 +2398,644 @@ function normalizeSectionsArray(sections) {
     .filter(Boolean);
 }
 
+function normalizeMaterialType(value, fallback = "static_asset") {
+  if (value === "static_asset" || value === "dynamic_video_asset" || value === "mixed") {
+    return value;
+  }
+  return fallback;
+}
+
+function isVideoAssetPath(value, fallbackType = "") {
+  const lower = String(value || "").trim().toLowerCase();
+  const normalizedType = normalizeVideoAssetType(fallbackType || "");
+  if (normalizedType === "mov" || normalizedType === "webm" || normalizedType === "m4v" || normalizedType === "mp4") {
+    if (lower.endsWith(`.${normalizedType}`)) {
+      return true;
+    }
+  }
+  return lower.endsWith(".mp4") || lower.endsWith(".mov") || lower.endsWith(".webm") || lower.endsWith(".m4v");
+}
+
+function deriveSceneMaterialType(scene) {
+  const hasStatic = Boolean(String(scene?.assetPath || "").trim());
+  const explicitVideoPath = String(scene?.videoPath || "").trim();
+  const outputAssetPath = String(scene?.videoScene?.outputAsset?.path || "").trim();
+  const outputAssetType = String(scene?.videoScene?.outputAsset?.type || scene?.videoType || "").trim();
+  const hasDynamic = isVideoAssetPath(explicitVideoPath, scene?.videoType) || isVideoAssetPath(outputAssetPath, outputAssetType);
+  if (hasStatic && hasDynamic) {
+    return "mixed";
+  }
+  if (hasDynamic) {
+    return "dynamic_video_asset";
+  }
+  return "static_asset";
+}
+
+function deriveDraftMaterialType(storyboard) {
+  const materialTypes = (storyboard || []).map((scene) => normalizeMaterialType(scene?.materialType || deriveSceneMaterialType(scene)));
+  if (!materialTypes.length) {
+    return "static_asset";
+  }
+  const hasStatic = materialTypes.includes("static_asset");
+  const hasDynamic = materialTypes.includes("dynamic_video_asset");
+  const hasMixed = materialTypes.includes("mixed");
+  if (hasMixed || (hasStatic && hasDynamic)) {
+    return "mixed";
+  }
+  if (hasDynamic) {
+    return "dynamic_video_asset";
+  }
+  return "static_asset";
+}
+
+function applyStoryboardMaterialTypes(storyboard) {
+  return (storyboard || []).map((scene) => ({
+    ...scene,
+    materialType: normalizeMaterialType(scene?.materialType || deriveSceneMaterialType(scene)),
+  }));
+}
+
+function syncDraftMaterialType(draft) {
+  draft.storyboard = applyStoryboardMaterialTypes(draft.storyboard || []);
+  draft.materialType = deriveDraftMaterialType(draft.storyboard);
+}
+
+function normalizeScenePurpose(value, fallback = "supporting") {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (normalized) {
+    return normalized;
+  }
+  return fallback;
+}
+
+function normalizeSceneShotType(value, fallback = "narrative") {
+  const normalized = String(value || "").trim().toLowerCase().replace(/\s+/g, "_");
+  if (normalized) {
+    return normalized;
+  }
+  return fallback;
+}
+
+function normalizeSceneImportance(value, fallback = "medium") {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (["low", "medium", "high", "critical"].includes(normalized)) {
+    return normalized;
+  }
+  return fallback;
+}
+
+function normalizeSceneTextField(value, fallback = "") {
+  return String(value || fallback || "").trim();
+}
+
+function normalizeSceneBoolean(value, fallback = true) {
+  if (typeof value === "boolean") {
+    return value;
+  }
+  return fallback;
+}
+
+function inferScenePurpose(scene) {
+  const title = String(scene?.sceneTitle || "").trim();
+  const visualType = normalizeSceneVisualType(scene?.visualType || "image");
+  if (visualType === "cover" || /开场|第一屏|判断/.test(title)) return "hook";
+  if (visualType === "brand_outro" || /结尾|CTA|收束/.test(title)) return "cta";
+  if (visualType === "chart" || /变量|拆解|分析/.test(title)) return "analysis";
+  if (visualType === "quote" || /观点|判断/.test(title)) return "conclusion";
+  return "supporting";
+}
+
+function inferSceneShotType(scene) {
+  const visualType = normalizeSceneVisualType(scene?.visualType || "image");
+  if (visualType === "cover") return "opener";
+  if (visualType === "chart") return "explainer";
+  if (visualType === "quote") return "statement";
+  if (visualType === "brand_outro") return "closing";
+  return deriveVideoSceneShotType(scene);
+}
+
+function inferSceneSubject(scene, draft) {
+  if (scene?.visualType === "cover") {
+    return normalizeSceneTextField(draft?.coverTitle || draft?.topic || scene?.sceneTitle || "");
+  }
+  return normalizeSceneTextField(scene?.sceneTitle || draft?.topic || "");
+}
+
+function inferSceneEnvironment(scene) {
+  const visualType = normalizeSceneVisualType(scene?.visualType || "image");
+  if (visualType === "chart") return "数据分析台、指标看板、变量拆解场景";
+  if (visualType === "quote") return "行业观点卡片、信息摘要场景";
+  if (visualType === "brand_outro") return "结尾收束页、品牌收口场景";
+  if (visualType === "cover") return "竖屏开场封面、标题冲击区";
+  return "IVD 行业、实验室、渠道、终端相关专业商业场景";
+}
+
+function inferSceneAction(scene) {
+  const voiceover = String(scene?.voiceover || "").trim();
+  const title = String(scene?.sceneTitle || "").trim();
+  if (/结尾|CTA|收束/.test(title)) return "收束观点并引导下一步动作";
+  if (/开场|判断/.test(title)) return "快速建立问题判断和主题冲突";
+  if (/拆解|变量|分析/.test(title)) return "逐层拆解变量并展示关键关系";
+  return normalizeSceneTextField(voiceover || title);
+}
+
+function inferSceneVisualStyle(scene, draft) {
+  if (normalizeSceneVisualType(scene?.visualType || "image") === "cover") {
+    return draft?.coverStyle === "viral" ? "高对比短视频封面风" : "商业报道封面风";
+  }
+  return "专业、克制、商业科技感、适合 IVD 行业视频";
+}
+
+function inferSceneTransitionHint(scene) {
+  const title = String(scene?.sceneTitle || "").trim();
+  if (/开场|判断/.test(title)) return "从封面或前序快速切入，建立首屏冲击";
+  if (/结尾|CTA|收束/.test(title)) return "平稳收束到结尾或 CTA";
+  if (/拆解|变量/.test(title)) return "与前后镜头保持解释链路的平滑递进";
+  return "与上下镜头保持顺滑切换";
+}
+
+function inferSceneImportance(scene) {
+  const purpose = inferScenePurpose(scene);
+  if (purpose === "hook" || purpose === "cta") return "high";
+  if (purpose === "analysis" || purpose === "conclusion") return "medium";
+  return "medium";
+}
+
+function normalizeSceneSchema(scene, draft, fallbackScene = {}) {
+  const baseScene = { ...fallbackScene, ...scene };
+  const inferredPurpose = inferScenePurpose(baseScene);
+  const inferredShotType = inferSceneShotType(baseScene);
+  return {
+    scenePurpose: normalizeScenePurpose(baseScene.scenePurpose, inferredPurpose),
+    shotType: normalizeSceneShotType(baseScene.shotType, inferredShotType),
+    subject: normalizeSceneTextField(baseScene.subject, inferSceneSubject(baseScene, draft)),
+    environment: normalizeSceneTextField(baseScene.environment, inferSceneEnvironment(baseScene)),
+    action: normalizeSceneTextField(baseScene.action, inferSceneAction(baseScene)),
+    visualStyle: normalizeSceneTextField(baseScene.visualStyle, inferSceneVisualStyle(baseScene, draft)),
+    motionHint: normalizeSceneTextField(baseScene.motionHint, deriveVideoSceneMotionHint(baseScene)),
+    transitionHint: normalizeSceneTextField(baseScene.transitionHint, inferSceneTransitionHint(baseScene)),
+    importance: normalizeSceneImportance(baseScene.importance, inferSceneImportance(baseScene)),
+    canUseStaticFallback: normalizeSceneBoolean(baseScene.canUseStaticFallback, true),
+  };
+}
+
+function createSceneReviewDimension(status, detail, extra = {}) {
+  return {
+    status: normalizeSceneReviewStatus(status),
+    detail: String(detail || "").trim(),
+    ...extra,
+  };
+}
+
+function normalizeSceneReviewStatus(value, fallback = "pass") {
+  if (["pass", "warning", "weak", "na"].includes(value)) {
+    return value;
+  }
+  return fallback;
+}
+
+function scoreSceneReviewDimension(value) {
+  const status = normalizeSceneReviewStatus(value, "pass");
+  if (status === "weak") return 35;
+  if (status === "warning") return 72;
+  if (status === "na") return 80;
+  return 100;
+}
+
+function buildSceneReviewSummary(review) {
+  const metrics = [
+    review?.durationFit,
+    review?.narrationMatch,
+    review?.subtitleReadability,
+    review?.visualMatch,
+    review?.motionQuality,
+    review?.styleConsistency,
+  ].filter(Boolean);
+  if (!metrics.length) {
+    return 0;
+  }
+  const total = metrics.reduce((sum, item) => sum + scoreSceneReviewDimension(item.status), 0);
+  return Math.round(total / metrics.length);
+}
+
+function extractSceneKeywords(text) {
+  return [...new Set(
+    String(text || "")
+      .split(/[\s，。！？、；;：:,.!?()（）【】\[\]\n]+/)
+      .map((item) => item.trim())
+      .filter((item) => item.length >= 2 && item.length <= 16),
+  )];
+}
+
+function computeKeywordOverlap(left, right) {
+  const leftTokens = extractSceneKeywords(left);
+  const rightTokens = extractSceneKeywords(right);
+  if (!leftTokens.length || !rightTokens.length) {
+    return { ratio: 0, overlap: [] };
+  }
+  const rightJoined = rightTokens.join(" ");
+  const overlap = leftTokens.filter((token) => rightJoined.includes(token));
+  return {
+    ratio: overlap.length / Math.max(leftTokens.length, 1),
+    overlap,
+  };
+}
+
+function estimateSceneExpectedDuration(scene, durationMode = 90) {
+  const profile = getDurationProfile(durationMode);
+  const voiceover = String(scene?.voiceover || "").trim();
+  const estimated = clamp(
+    Math.round(Math.max(voiceover.length, 1) / Math.max(profile.charRate, 1)),
+    4,
+    40,
+  );
+  return estimated;
+}
+
+function buildSceneSubtitlePreviewEntries(scene, durationMode = 90) {
+  return buildSubtitleEntriesFromBlocks([
+    {
+      label: String(scene?.id || "scene").trim() || "scene",
+      text: String(scene?.voiceover || "").trim(),
+    },
+  ], durationMode, Number(scene?.durationSec || 6));
+}
+
+function buildSceneSubtitleReadability(scene, durationMode = 90) {
+  const entries = buildSceneSubtitlePreviewEntries(scene, durationMode);
+  const cpsValues = entries.map((entry) => {
+    const duration = Math.max(Number(entry.endSec || 0) - Number(entry.startSec || 0), 0.1);
+    return Number((String(entry.text || "").trim().length / duration).toFixed(2));
+  });
+  const maxCharsPerSec = cpsValues.length ? Math.max(...cpsValues) : 0;
+  const totalChars = entries.reduce((sum, entry) => sum + String(entry.text || "").trim().length, 0);
+  const durationSec = Math.max(Number(scene?.durationSec || 0), 1);
+  const charsPerSceneSec = Number((totalChars / durationSec).toFixed(2));
+  const entryCount = entries.length;
+  if (maxCharsPerSec > 7.2 || charsPerSceneSec > 5.8 || entryCount > Math.max(5, Math.round(durationSec / 1.2))) {
+    return createSceneReviewDimension("weak", "字幕切分偏密，单条时长或阅读负担偏高。", {
+      entryCount,
+      maxCharsPerSec,
+      charsPerSceneSec,
+    });
+  }
+  if (maxCharsPerSec > 6.2 || charsPerSceneSec > 4.9 || entryCount > Math.max(4, Math.round(durationSec / 1.5))) {
+    return createSceneReviewDimension("warning", "字幕切分略密，建议重切以提升阅读舒适度。", {
+      entryCount,
+      maxCharsPerSec,
+      charsPerSceneSec,
+    });
+  }
+  return createSceneReviewDimension("pass", "字幕切分与阅读密度基本合理。", {
+    entryCount,
+    maxCharsPerSec,
+    charsPerSceneSec,
+  });
+}
+
+function buildSceneDurationFit(scene, durationMode = 90) {
+  const actualDuration = Math.max(Number(scene?.durationSec || 0), 1);
+  const expectedDuration = estimateSceneExpectedDuration(scene, durationMode);
+  const deltaSec = Number((actualDuration - expectedDuration).toFixed(2));
+  const absDelta = Math.abs(deltaSec);
+  if (absDelta > Math.max(3, expectedDuration * 0.38)) {
+    return createSceneReviewDimension("weak", "镜头时长与口播密度明显不匹配。", {
+      actualDuration,
+      expectedDuration,
+      deltaSec,
+    });
+  }
+  if (absDelta > Math.max(1.5, expectedDuration * 0.2)) {
+    return createSceneReviewDimension("warning", "镜头时长与口播密度略有偏差。", {
+      actualDuration,
+      expectedDuration,
+      deltaSec,
+    });
+  }
+  return createSceneReviewDimension("pass", "镜头时长与口播长度基本匹配。", {
+    actualDuration,
+    expectedDuration,
+    deltaSec,
+  });
+}
+
+function buildSceneNarrationMatch(scene) {
+  const sceneSchema = normalizeSceneSchema(scene, null, scene);
+  const narrationText = String(scene?.voiceover || "").trim();
+  const structuredText = [
+    String(scene?.sceneTitle || "").trim(),
+    sceneSchema.subject,
+    sceneSchema.action,
+    String(scene?.visualPrompt || "").trim(),
+  ].filter(Boolean).join(" ");
+  const overlap = computeKeywordOverlap(narrationText, structuredText);
+  if (overlap.ratio < 0.16) {
+    return createSceneReviewDimension("weak", "口播内容与当前镜头描述锚点偏弱。", overlap);
+  }
+  if (overlap.ratio < 0.3) {
+    return createSceneReviewDimension("warning", "口播与镜头描述存在一定偏差，建议补强 scene 描述。", overlap);
+  }
+  return createSceneReviewDimension("pass", "口播与镜头描述基本一致。", overlap);
+}
+
+function buildSceneVisualMatch(scene) {
+  const sceneSchema = normalizeSceneSchema(scene, null, scene);
+  const sourceText = [
+    String(scene?.voiceover || "").trim(),
+    String(scene?.sceneTitle || "").trim(),
+    sceneSchema.subject,
+    sceneSchema.action,
+  ].filter(Boolean).join(" ");
+  const targetText = [
+    String(scene?.visualPrompt || "").trim(),
+    sceneSchema.environment,
+    sceneSchema.visualStyle,
+    sceneSchema.transitionHint,
+  ].filter(Boolean).join(" ");
+  const overlap = computeKeywordOverlap(sourceText, targetText);
+  if (overlap.ratio < 0.14) {
+    return createSceneReviewDimension("weak", "画面描述与口播主旨存在明显偏差。", overlap);
+  }
+  if (overlap.ratio < 0.28) {
+    return createSceneReviewDimension("warning", "画面描述与口播主旨结合度一般。", overlap);
+  }
+  return createSceneReviewDimension("pass", "画面描述与口播主旨基本一致。", overlap);
+}
+
+function buildSceneMotionQuality(scene) {
+  const motionHint = String(scene?.motionHint || scene?.videoScene?.motionHint || "").trim();
+  const isDynamicPreferred = resolveSceneGenerationMode(scene, { sceneGenerationMode: "auto" }) === "dynamic";
+  const hasDynamicAsset = Boolean(String(scene?.videoPath || scene?.videoScene?.outputAsset?.path || "").trim());
+  if (isDynamicPreferred && !motionHint) {
+    return createSceneReviewDimension("weak", "动态镜头缺少明确 motionHint。", { hasDynamicAsset, motionHint });
+  }
+  if (isDynamicPreferred && /轻微|避免静止/.test(motionHint) && !hasDynamicAsset) {
+    return createSceneReviewDimension("warning", "动态镜头运动提示偏弱，且当前还没有成功产出动态素材。", { hasDynamicAsset, motionHint });
+  }
+  if (isDynamicPreferred && /轻微|缓慢/.test(motionHint) && hasDynamicAsset) {
+    return createSceneReviewDimension("warning", "动态镜头已生成，但运动指令偏保守。", { hasDynamicAsset, motionHint });
+  }
+  return createSceneReviewDimension("pass", "镜头运动提示基本可用。", { hasDynamicAsset, motionHint });
+}
+
+function buildSceneStyleConsistency(scene, draft) {
+  const sceneSchema = normalizeSceneSchema(scene, draft, scene);
+  const coverStyle = normalizeCoverStyle(draft?.coverStyle);
+  const styleText = String(sceneSchema.visualStyle || "").trim();
+  if (!styleText) {
+    return createSceneReviewDimension("weak", "镜头缺少明确 visualStyle。");
+  }
+  if (coverStyle === "viral" && /克制|报告|报道/.test(styleText)) {
+    return createSceneReviewDimension("warning", "镜头风格偏保守，与当前爆款封面方向存在轻微偏差。", { coverStyle });
+  }
+  if (coverStyle === "report" && /夸张|强冲击|爆款/.test(styleText)) {
+    return createSceneReviewDimension("warning", "镜头风格偏强冲击，与当前报告风方向存在轻微偏差。", { coverStyle });
+  }
+  return createSceneReviewDimension("pass", "镜头风格与当前草稿方向基本一致。", { coverStyle });
+}
+
+async function maybeEnhanceSceneReviewWithLlm(draft, scene, ruleReview) {
+  const route = await resolveLlmRouteConfig("storyboard");
+  if (!isLlmRouteEnabled(route)) {
+    return { review: ruleReview, source: "rules" };
+  }
+
+  const effectiveRoute = applyMinimumRouteTimeout(route, 25);
+  const prompt = [
+    "你负责做单个 scene 的快速质量复核。",
+    "请基于给定 scene 和已有规则结果，补充判断，不要重写结构。",
+    "只返回 JSON。",
+    '格式：{"visualMatch":"pass|warning|weak","motionQuality":"pass|warning|weak","styleConsistency":"pass|warning|weak","riskFlags":["..."],"suggestions":["..."]}',
+    `sceneTitle：${scene?.sceneTitle || ""}`,
+    `scenePurpose：${scene?.scenePurpose || ""}`,
+    `shotType：${scene?.shotType || ""}`,
+    `voiceover：${scene?.voiceover || ""}`,
+    `visualPrompt：${scene?.visualPrompt || ""}`,
+    `visualStyle：${scene?.visualStyle || ""}`,
+    `motionHint：${scene?.motionHint || ""}`,
+    `transitionHint：${scene?.transitionHint || ""}`,
+    `当前规则结果：${JSON.stringify({
+      narrationMatch: ruleReview?.narrationMatch?.status,
+      subtitleReadability: ruleReview?.subtitleReadability?.status,
+      visualMatch: ruleReview?.visualMatch?.status,
+      motionQuality: ruleReview?.motionQuality?.status,
+      styleConsistency: ruleReview?.styleConsistency?.status,
+      riskFlags: ruleReview?.riskFlags || [],
+      suggestions: ruleReview?.suggestions || [],
+    })}`,
+  ].join("\n");
+
+  try {
+    const response = await fetchWithRoute(effectiveRoute, buildLlmRouteUrl(effectiveRoute), {
+      method: "POST",
+      headers: buildLlmHeaders(effectiveRoute),
+      body: JSON.stringify(buildScriptRequestBody(effectiveRoute, prompt)),
+    });
+    if (!response.ok) {
+      throw new Error(`scene review 失败：${response.status}`);
+    }
+    const data = await response.json();
+    const parsed = parseJsonResponse(extractLlmTextOutput(effectiveRoute, data), "scene review");
+    const merged = {
+      ...ruleReview,
+      visualMatch: parsed?.visualMatch
+        ? createSceneReviewDimension(parsed.visualMatch, ruleReview.visualMatch?.detail || "LLM 复核后的画面匹配判断。", {
+            ...(ruleReview.visualMatch || {}),
+            llm: true,
+          })
+        : ruleReview.visualMatch,
+      motionQuality: parsed?.motionQuality
+        ? createSceneReviewDimension(parsed.motionQuality, ruleReview.motionQuality?.detail || "LLM 复核后的运动质量判断。", {
+            ...(ruleReview.motionQuality || {}),
+            llm: true,
+          })
+        : ruleReview.motionQuality,
+      styleConsistency: parsed?.styleConsistency
+        ? createSceneReviewDimension(parsed.styleConsistency, ruleReview.styleConsistency?.detail || "LLM 复核后的风格一致性判断。", {
+            ...(ruleReview.styleConsistency || {}),
+            llm: true,
+          })
+        : ruleReview.styleConsistency,
+      riskFlags: uniqueArray([...(ruleReview.riskFlags || []), ...toArray(parsed?.riskFlags)]),
+      suggestions: uniqueArray([...(ruleReview.suggestions || []), ...toArray(parsed?.suggestions)]),
+    };
+    merged.score = buildSceneReviewSummary(merged);
+    return { review: merged, source: "hybrid" };
+  } catch (error) {
+    await warnWithLog(
+      "scene_review_llm_fallback",
+      `scene review LLM 失败，已回退规则评估：${error instanceof Error ? error.message : String(error)}`,
+      { routeName: "storyboard", sceneId: scene?.id || "" },
+    );
+    return { review: ruleReview, source: "rules" };
+  }
+}
+
+async function buildSceneReview(draft, scene, context = {}) {
+  const durationFit = buildSceneDurationFit(scene, draft?.durationMode || context?.durationMode || 90);
+  const narrationMatch = buildSceneNarrationMatch(scene);
+  const subtitleReadability = buildSceneSubtitleReadability(scene, draft?.durationMode || context?.durationMode || 90);
+  const visualMatch = buildSceneVisualMatch(scene);
+  const motionQuality = buildSceneMotionQuality(scene);
+  const styleConsistency = buildSceneStyleConsistency(scene, draft);
+  const riskFlags = [];
+  const suggestions = [];
+
+  if (durationFit.status === "weak") {
+    riskFlags.push("duration_mismatch");
+    suggestions.push("调整 scene 时长或压缩当前口播表达。");
+  }
+  if (subtitleReadability.status !== "pass") {
+    riskFlags.push("subtitle_overload");
+    suggestions.push("重切字幕，降低单条字幕阅读负担。");
+  }
+  if (narrationMatch.status !== "pass") {
+    riskFlags.push("narration_mismatch");
+    suggestions.push("补强 scene 描述，让主体和动作更贴合当前口播。");
+  }
+  if (visualMatch.status !== "pass") {
+    riskFlags.push("visual_mismatch");
+    suggestions.push("重做当前镜头，并让画面描述更贴近 scene 主旨。");
+  }
+  if (motionQuality.status !== "pass") {
+    riskFlags.push("motion_weak");
+    suggestions.push("补强 motionHint，再重做当前动态镜头。");
+  }
+  if (styleConsistency.status !== "pass") {
+    riskFlags.push("style_drift");
+    suggestions.push("收拢 visualStyle，和当前草稿风格保持一致。");
+  }
+
+  const baseReview = {
+    reviewId: buildTraceId("scnrvw"),
+    createdAt: new Date().toISOString(),
+    phase: String(context?.phase || "review").trim() || "review",
+    source: "rules",
+    sceneId: String(scene?.id || "").trim(),
+    durationFit,
+    narrationMatch,
+    subtitleReadability,
+    visualMatch,
+    motionQuality,
+    styleConsistency,
+    riskFlags: uniqueArray(riskFlags),
+    score: 0,
+    suggestions: uniqueArray(suggestions),
+  };
+  baseReview.score = buildSceneReviewSummary(baseReview);
+
+  const enhanced = await maybeEnhanceSceneReviewWithLlm(draft, scene, baseReview);
+  return {
+    ...enhanced.review,
+    source: enhanced.source,
+  };
+}
+
+function appendDraftHistoryEntry(list, entry, limit = 80) {
+  const next = [...(Array.isArray(list) ? list : []), entry];
+  return next.slice(-limit);
+}
+
+function applySceneNarrationRepair(scene) {
+  const sceneSchema = normalizeSceneSchema(scene, null, scene);
+  const refinedSubject = String(scene?.sceneTitle || sceneSchema.subject || "").trim() || sceneSchema.subject;
+  const refinedAction = String(scene?.voiceover || sceneSchema.action || "").trim() || sceneSchema.action;
+  const nextPrompt = [
+    String(scene?.visualPrompt || "").trim(),
+    `主体：${refinedSubject}`,
+    `动作：${refinedAction}`,
+  ].filter(Boolean).join("；");
+  return {
+    ...scene,
+    subject: refinedSubject,
+    action: refinedAction,
+    visualPrompt: nextPrompt,
+  };
+}
+
+function strengthenSceneMotionHint(scene) {
+  const current = String(scene?.motionHint || "").trim();
+  if (!current) {
+    return "明确主体运动路径，加入镜头推进、平移或跟随动作，避免静止感。";
+  }
+  if (/明确主体运动路径/.test(current)) {
+    return current;
+  }
+  return `${current}；明确主体运动路径，加入推进、平移或跟随动作，避免静止感。`;
+}
+
+async function rebuildDraftSubtitleEntries(draft, draftDir) {
+  const blocks = buildNarrationBlocks(draft);
+  const voicePath = String(draft?.assets?.voicePath || "").trim();
+  const targetDurationSec = voicePath
+    ? await getAudioDurationSec(path.join(rootDir, voicePath))
+    : null;
+  draft.subtitleEntries = buildSubtitleEntriesFromBlocks(blocks, draft.durationMode, targetDurationSec);
+  if (draft.assets?.subtitlePath) {
+    const subtitlePath = path.join(rootDir, draft.assets.subtitlePath);
+    await fs.writeFile(subtitlePath, toSrt(draft.subtitleEntries), "utf8");
+  }
+}
+
+async function dispatchSceneRepair(draft, scene, draftDir, options = {}) {
+  const review = options.review || await buildSceneReview(draft, scene, { phase: "pre_repair" });
+  const actions = [];
+  let nextScene = { ...scene };
+  let subtitlesRetimed = false;
+  const preferDynamic = options.sceneGenerationMode === "dynamic"
+    || resolveSceneGenerationMode(scene, { sceneGenerationMode: options.sceneGenerationMode || "auto" }) === "dynamic";
+
+  if (review.subtitleReadability?.status !== "pass") {
+    await rebuildDraftSubtitleEntries(draft, draftDir);
+    subtitlesRetimed = true;
+    actions.push({
+      type: "subtitle_resplit",
+      reason: review.subtitleReadability?.detail || "字幕负载偏高，已重切字幕。",
+    });
+  }
+
+  if (review.narrationMatch?.status !== "pass") {
+    nextScene = applySceneNarrationRepair(nextScene);
+    actions.push({
+      type: "scene_description_repair",
+      reason: review.narrationMatch?.detail || "scene 描述与口播偏差较大，已补强主体和动作。",
+    });
+  }
+
+  if (review.motionQuality?.status !== "pass" && preferDynamic && isSceneEligibleForDynamicVideo(nextScene)) {
+    nextScene = {
+      ...nextScene,
+      motionHint: strengthenSceneMotionHint(nextScene),
+    };
+    actions.push({
+      type: "motion_retune",
+      reason: review.motionQuality?.detail || "动态镜头运动提示偏弱，已加强 motionHint。",
+    });
+  }
+
+  const shouldRegenerateVisual = review.visualMatch?.status !== "pass"
+    || (review.motionQuality?.status !== "pass" && preferDynamic && isSceneEligibleForDynamicVideo(nextScene))
+    || (review.narrationMatch?.status !== "pass" && preferDynamic && isSceneEligibleForDynamicVideo(nextScene));
+
+  if (shouldRegenerateVisual) {
+    actions.push({
+      type: preferDynamic && isSceneEligibleForDynamicVideo(nextScene) ? "dynamic_scene_regenerate" : "scene_regenerate",
+      reason: review.visualMatch?.detail || "当前镜头画面需要重做。",
+    });
+  }
+
+  return {
+    review,
+    nextScene,
+    actions,
+    subtitlesRetimed,
+    regenerateVisual: shouldRegenerateVisual,
+    nextSceneGenerationMode: preferDynamic && isSceneEligibleForDynamicVideo(nextScene)
+      ? "dynamic"
+      : (options.sceneGenerationMode || "auto"),
+  };
+}
+
 function buildStoryboardFromDraft(draft) {
   const script = draft.script || buildStructuredScript({
     title: draft.title,
@@ -2246,6 +3068,16 @@ function buildStoryboardFromDraft(draft) {
       voiceover: script.hook,
       visualType: "cover",
       visualPrompt: `${script.coverTitle}，竖屏开场封面，强调主题冲突和判断感`,
+      scenePurpose: "hook",
+      shotType: "opener",
+      subject: script.coverTitle || draft.topic,
+      environment: "竖屏开场封面、标题冲击区",
+      action: "用第一屏快速建立判断和冲突",
+      visualStyle: draft.coverStyle === "viral" ? "高对比短视频封面风" : "商业报道封面风",
+      motionHint: "轻微推进，快速建立主题和判断感",
+      transitionHint: "从封面切入到正文第一镜",
+      importance: "high",
+      canUseStaticFallback: true,
     },
     {
       id: "scene-2",
@@ -2253,6 +3085,16 @@ function buildStoryboardFromDraft(draft) {
       voiceover: script.sections?.[0] || "",
       visualType: "image",
       visualPrompt: `${draft.topic}，IVD 行业现象，终端、渠道、实验室相关商业科技画面`,
+      scenePurpose: "context",
+      shotType: "narrative",
+      subject: draft.topic,
+      environment: "IVD 行业、终端、渠道、实验室相关专业商业场景",
+      action: "展示行业现象与问题外观",
+      visualStyle: "专业、克制、商业科技感、适合 IVD 行业视频",
+      motionHint: "轻微镜头运动，避免静止画面",
+      transitionHint: "承接开场判断，进入现象说明",
+      importance: "medium",
+      canUseStaticFallback: true,
     },
     {
       id: "scene-3",
@@ -2260,6 +3102,16 @@ function buildStoryboardFromDraft(draft) {
       voiceover: sectionTwoSegments[0] || script.sections?.[1] || "",
       visualType: "chart",
       visualPrompt: `${draft.topic}，关键变量、渠道效率、利润结构、终端覆盖的图表卡片`,
+      scenePurpose: "analysis",
+      shotType: "explainer",
+      subject: "关键变量拆解",
+      environment: "数据分析台、指标看板、变量拆解场景",
+      action: "逐层拆解变量关系和关键数据",
+      visualStyle: "信息图表、行业分析卡片、克制专业",
+      motionHint: "缓慢平移或层次推进，突出信息递进",
+      transitionHint: "从现象说明切入变量分析",
+      importance: "high",
+      canUseStaticFallback: true,
     },
     {
       id: "scene-4",
@@ -2267,6 +3119,16 @@ function buildStoryboardFromDraft(draft) {
       voiceover: sectionTwoSegments[1] || script.sections?.[1] || "",
       visualType: "image",
       visualPrompt: `${draft.topic}，实验室、检测设备、产业链协同的专业商业视觉`,
+      scenePurpose: "analysis",
+      shotType: "explainer",
+      subject: "变量拆解延伸",
+      environment: "实验室、检测设备、产业链协同的专业商业场景",
+      action: "用真实业务场景承接变量拆解",
+      visualStyle: "专业、克制、商业科技感、适合 IVD 行业视频",
+      motionHint: "缓慢平移或层次推进，突出信息递进",
+      transitionHint: "延续变量分析并补充场景理解",
+      importance: "medium",
+      canUseStaticFallback: true,
     },
     {
       id: "scene-5",
@@ -2274,6 +3136,16 @@ function buildStoryboardFromDraft(draft) {
       voiceover: script.sections?.[2] || "",
       visualType: "quote",
       visualPrompt: `${draft.topic}，行业判断、观点总结、信息卡样式`,
+      scenePurpose: "conclusion",
+      shotType: "statement",
+      subject: "行业判断与观点总结",
+      environment: "行业观点卡片、信息摘要场景",
+      action: "给出观点判断和结论收束",
+      visualStyle: "观点卡片、信息摘要、专业克制",
+      motionHint: "轻微镜头运动，突出结论句",
+      transitionHint: "从分析段过渡到观点总结",
+      importance: "high",
+      canUseStaticFallback: true,
     },
     {
       id: "scene-6",
@@ -2281,10 +3153,36 @@ function buildStoryboardFromDraft(draft) {
       voiceover: script.cta,
       visualType: "brand_outro",
       visualPrompt: "简洁专业的结尾页，适合 CTA 和品牌收束",
+      scenePurpose: "cta",
+      shotType: "closing",
+      subject: "结尾引导与 CTA",
+      environment: "结尾收束页、品牌收口场景",
+      action: "收束判断并引导下一步动作",
+      visualStyle: "简洁专业结尾页、品牌收束风格",
+      motionHint: "轻微拉远或稳定停留，给结尾留出口",
+      transitionHint: "平稳收束到结尾和 CTA",
+      importance: "high",
+      canUseStaticFallback: true,
     },
   ];
 
-  return allocateStoryboardDurations(sceneBlueprints, draft.durationMode || 90);
+  return allocateStoryboardDurations(sceneBlueprints, draft.durationMode || 90).map((scene) => {
+    const sceneSchema = normalizeSceneSchema(scene, draft, scene);
+    const normalizedScene = {
+      ...scene,
+      ...sceneSchema,
+      videoPath: "",
+      videoType: "",
+      materialType: "static_asset",
+    };
+    return {
+      ...normalizedScene,
+      videoScene: buildDefaultVideoSceneState(normalizedScene, {
+        coverPath: draft.assets?.coverPath || "",
+        angle: draft.angle,
+      }),
+    };
+  });
 }
 
 function splitStoryboardText(text) {
@@ -2368,11 +3266,18 @@ async function generateStoryboardAssets(draftDir, storyboard, context) {
 
   for (const scene of storyboard || []) {
     const asset = await generateSceneAsset(scenesDir, scene, context);
-    nextScenes.push({
+    const nextScene = {
       ...scene,
       assetPath: asset.assetPath,
       assetType: asset.assetType,
       assetPrompt: asset.assetPrompt || scene.visualPrompt || "",
+      videoPath: asset.videoPath || "",
+      videoType: asset.videoType || "",
+      videoScene: asset.videoScene || normalizeVideoSceneState(scene?.videoScene, scene, context),
+    };
+    nextScenes.push({
+      ...nextScene,
+      materialType: deriveSceneMaterialType(nextScene),
     });
   }
 
@@ -2380,12 +3285,111 @@ async function generateStoryboardAssets(draftDir, storyboard, context) {
 }
 
 async function generateSceneAsset(scenesDir, scene, context) {
+  const sceneGenerationMode = resolveSceneGenerationMode(scene, context);
+  const dynamicRouteEnabled = sceneGenerationMode === "dynamic" && isSceneEligibleForDynamicVideo(scene) && await isLlmRouteEnabledByName("video_scene");
+
+  const staticFallback = async (videoSceneState = null) => {
+    if (scene.visualType === "image") {
+      try {
+        if (await isLlmRouteEnabledByName("image")) {
+          const generated = await generateSceneImageWithLlm(scenesDir, scene);
+          return {
+            assetPath: relativeMediaPath(generated.filePath),
+            assetType: generated.type,
+            assetPrompt: scene.visualPrompt || "",
+            videoPath: "",
+            videoType: "",
+            videoScene: applyVideoSceneFallbackState(videoSceneState, scene, {
+              fallbackPath: relativeMediaPath(generated.filePath),
+              fallbackType: generated.type,
+            }),
+          };
+        }
+      } catch (error) {
+        await warnWithLog(
+          "scene_image_fallback",
+          `分镜图片生成失败，已回退到本地卡片：${error instanceof Error ? error.message : String(error)}`,
+          { routeName: "image", sceneId: scene.id || "" },
+        );
+      }
+    }
+
+    const rendered = await renderLocalSceneAsset(scenesDir, scene, context);
+    return {
+      assetPath: relativeMediaPath(rendered.filePath),
+      assetType: rendered.type,
+      assetPrompt: scene.visualPrompt || "",
+      videoPath: "",
+      videoType: "",
+      videoScene: applyVideoSceneFallbackState(videoSceneState, scene, {
+        fallbackPath: relativeMediaPath(rendered.filePath),
+        fallbackType: rendered.type,
+      }),
+    };
+  };
+
   if (scene.visualType === "cover") {
     return {
       assetPath: context.coverPath || "",
       assetType: "cover",
       assetPrompt: scene.visualPrompt || "",
+      videoPath: "",
+      videoType: "",
+      videoScene: normalizeVideoSceneState({
+        ...(scene?.videoScene || {}),
+        status: dynamicRouteEnabled ? scene?.videoScene?.status : "disabled",
+        outputAsset: {
+          path: "",
+          type: "mp4",
+          durationSec: Math.max(4, Number(scene?.durationSec || 6)),
+        },
+      }, scene, context),
     };
+  }
+
+  if (dynamicRouteEnabled) {
+    const payload = buildVideoScenePayload(scene, context);
+    try {
+      const generated = await generateSceneVideoWithLlm(scenesDir, scene, payload);
+      const referenceAsset = await ensureSceneReferenceAsset(scenesDir, scene, context);
+      await logRuntimeEvent("info", "video_scene_generated", {
+        traceId: buildTraceId("vscn"),
+        sceneId: scene.id || "",
+        provider: generated.providerMeta?.provider || "",
+        model: generated.providerMeta?.model || "",
+      });
+      return {
+        assetPath: referenceAsset.assetPath,
+        assetType: referenceAsset.assetType,
+        assetPrompt: scene.visualPrompt || "",
+        videoPath: relativeMediaPath(generated.filePath),
+        videoType: generated.type,
+        videoScene: normalizeVideoSceneState({
+          ...payload,
+          outputAsset: {
+            path: relativeMediaPath(generated.filePath),
+            type: generated.type,
+            durationSec: payload.desiredDuration,
+          },
+          providerMeta: generated.providerMeta,
+          status: "success",
+          error: "",
+        }, scene, context),
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const fallbackState = normalizeVideoSceneState({
+        ...payload,
+        status: "error",
+        error: message,
+      }, scene, context);
+      await warnWithLog(
+        "video_scene_fallback",
+        `动态镜头生成失败，已回退到静态素材：${message}`,
+        { routeName: "video_scene", sceneId: scene.id || "" },
+      );
+      return staticFallback(fallbackState);
+    }
   }
 
   if (scene.visualType === "image") {
@@ -2396,6 +3400,18 @@ async function generateSceneAsset(scenesDir, scene, context) {
           assetPath: relativeMediaPath(generated.filePath),
           assetType: generated.type,
           assetPrompt: scene.visualPrompt || "",
+          videoPath: "",
+          videoType: "",
+          videoScene: normalizeVideoSceneState({
+            ...(scene?.videoScene || {}),
+            status: dynamicRouteEnabled ? normalizeVideoSceneStatus(scene?.videoScene?.status) : "disabled",
+            outputAsset: {
+              path: "",
+              type: "mp4",
+              durationSec: Math.max(4, Number(scene?.durationSec || 6)),
+            },
+            error: dynamicRouteEnabled ? String(scene?.videoScene?.error || "").trim() : "",
+          }, scene, context),
         };
       }
     } catch (error) {
@@ -2407,11 +3423,33 @@ async function generateSceneAsset(scenesDir, scene, context) {
     }
   }
 
+  return staticFallback(normalizeVideoSceneState({
+    ...(scene?.videoScene || {}),
+    status: dynamicRouteEnabled ? normalizeVideoSceneStatus(scene?.videoScene?.status) : "disabled",
+    outputAsset: dynamicRouteEnabled
+      ? scene?.videoScene?.outputAsset
+      : {
+          path: "",
+          type: "mp4",
+          durationSec: Math.max(4, Number(scene?.durationSec || 6)),
+        },
+    error: dynamicRouteEnabled ? String(scene?.videoScene?.error || "").trim() : "",
+  }, scene, context));
+}
+
+async function ensureSceneReferenceAsset(scenesDir, scene, context) {
+  const currentAssetPath = String(scene?.assetPath || "").trim();
+  const currentAssetType = String(scene?.assetType || "").trim();
+  if (currentAssetPath && currentAssetType) {
+    return {
+      assetPath: currentAssetPath,
+      assetType: currentAssetType,
+    };
+  }
   const rendered = await renderLocalSceneAsset(scenesDir, scene, context);
   return {
     assetPath: relativeMediaPath(rendered.filePath),
     assetType: rendered.type,
-    assetPrompt: scene.visualPrompt || "",
   };
 }
 
@@ -2431,15 +3469,397 @@ async function generateSceneImageWithLlm(scenesDir, scene) {
 }
 
 function buildSceneImagePrompt(scene) {
+  const sceneSchema = normalizeSceneSchema(scene, null, scene);
   return [
     "为中文 IVD 行业短视频生成单个镜头画面。",
     "画面比例：9:16 竖屏。",
     `镜头标题：${scene.sceneTitle}`,
-    `镜头说明：${scene.visualPrompt || scene.voiceover || ""}`,
+    `镜头用途：${sceneSchema.scenePurpose}`,
+    `镜头类型：${sceneSchema.shotType}`,
+    `主体：${sceneSchema.subject}`,
+    `环境：${sceneSchema.environment}`,
+    `动作：${sceneSchema.action}`,
+    `视觉风格：${sceneSchema.visualStyle}`,
+    `动态倾向：${sceneSchema.motionHint}`,
+    `转场提示：${sceneSchema.transitionHint}`,
+    `重要性：${sceneSchema.importance}`,
+    `镜头说明：${scene.visualPrompt || sceneSchema.action || scene.voiceover || ""}`,
     `口播内容：${scene.voiceover || ""}`,
+    `允许静态回退：${sceneSchema.canUseStaticFallback ? "是" : "否"}`,
     "风格：商业科技感、专业、克制、适合行业观察视频。",
     "禁止：水印、logo、复杂小字、低清晰度、娱乐化夸张元素。",
   ].join("\n");
+}
+
+function isSceneEligibleForDynamicVideo(scene) {
+  return normalizeSceneVisualType(scene?.visualType || "image") === "image";
+}
+
+function buildVideoScenePayload(scene, context = {}) {
+  const sceneSchema = normalizeSceneSchema(scene, context?.draft || null, scene);
+  const sceneTitle = String(scene?.sceneTitle || "").trim();
+  const narrationText = String(scene?.voiceover || "").trim();
+  const subtitleText = buildVideoSceneSubtitleText(scene, narrationText);
+  const desiredDuration = Math.max(4, Number(scene?.durationSec || 6));
+  const referenceImages = uniqueArray([
+    String(scene?.assetPath || "").trim(),
+    String(context?.coverPath || "").trim(),
+  ]);
+
+  return {
+    sceneId: String(scene?.id || "").trim(),
+    sceneTitle,
+    narrationText,
+    subtitleText,
+    desiredDuration,
+    shotType: sceneSchema.shotType,
+    visualIntent: [
+      String(scene?.visualPrompt || "").trim(),
+      sceneSchema.subject,
+      sceneSchema.environment,
+      sceneSchema.action,
+      sceneSchema.visualStyle,
+      sceneSchema.transitionHint,
+    ].filter(Boolean).join("；"),
+    motionHint: sceneSchema.motionHint,
+    emotionTone: deriveVideoSceneEmotionTone(context),
+    referenceImages,
+    referenceVideoClips: [],
+    outputAsset: {
+      path: "",
+      type: "mp4",
+      durationSec: desiredDuration,
+    },
+    providerMeta: {},
+    status: "pending",
+    error: "",
+  };
+}
+
+function resolveSceneGenerationMode(scene, context = {}) {
+  const requestedMode = String(context?.sceneGenerationMode || "").trim();
+  if (requestedMode === "dynamic" || requestedMode === "static") {
+    return requestedMode;
+  }
+  const hasDynamicScene = Boolean(String(scene?.videoPath || scene?.videoScene?.outputAsset?.path || "").trim());
+  const materialType = normalizeMaterialType(scene?.materialType || deriveSceneMaterialType(scene));
+  const videoSceneStatus = normalizeVideoSceneStatus(scene?.videoScene?.status);
+  const hasDynamicHistory = videoSceneStatus === "success" || videoSceneStatus === "fallback" || videoSceneStatus === "error";
+  if (hasDynamicScene || hasDynamicHistory || materialType === "dynamic_video_asset" || materialType === "mixed") {
+    return "dynamic";
+  }
+  return "static";
+}
+
+function buildVideoSceneSubtitleText(scene, narrationText) {
+  const explicitSubtitle = String(scene?.subtitleText || "").trim();
+  if (explicitSubtitle) {
+    return explicitSubtitle;
+  }
+  return narrationText;
+}
+
+function deriveVideoSceneShotType(scene) {
+  const normalizedVisualType = normalizeSceneVisualType(scene?.visualType || "image");
+  if (normalizedVisualType === "cover") return "opener";
+  const title = String(scene?.sceneTitle || "").trim();
+  if (/开场|第一屏|判断/.test(title)) return "opener";
+  if (/结尾|CTA|收束/.test(title)) return "closing";
+  if (/拆解|变量|分析/.test(title)) return "explainer";
+  return "narrative";
+}
+
+function deriveVideoSceneMotionHint(scene) {
+  const title = String(scene?.sceneTitle || "").trim();
+  if (/开场|第一屏|判断/.test(title)) return "轻微推进，快速建立主题和判断感";
+  if (/拆解|变量|分析/.test(title)) return "缓慢平移或层次推进，突出信息递进";
+  if (/结尾|CTA|收束/.test(title)) return "轻微拉远或稳定停留，给结尾留出口";
+  return "轻微镜头运动，避免静止画面";
+}
+
+function deriveVideoSceneEmotionTone(context = {}) {
+  const angle = String(context?.angle || "").trim();
+  if (/风险|预警|收缩|压力/.test(angle)) return "克制偏紧张";
+  if (/机会|增长|突破/.test(angle)) return "稳健偏积极";
+  return "专业、克制、行业判断感";
+}
+
+async function generateSceneVideoWithLlm(scenesDir, scene, payload) {
+  const route = await resolveLlmRouteConfig("video_scene");
+  const url = buildLlmRouteUrl(route);
+  if (!isLlmRouteEnabled(route)) {
+    throw new Error("动态镜头调用点未启用");
+  }
+  const response = await fetchWithRoute(route, url, buildVideoSceneRequest(route, payload));
+  if (!response.ok) {
+    throw new Error(`动态镜头接口返回 ${response.status}`);
+  }
+
+  const result = await extractVideoSceneAsset(response, route);
+  if (!result?.buffer) {
+    throw new Error("动态镜头响应未返回可保存的视频资产");
+  }
+
+  const fileType = normalizeVideoAssetType(result.type || "mp4");
+  const filePath = path.join(scenesDir, `${scene.id}.${fileType}`);
+  await fs.writeFile(filePath, result.buffer);
+  return {
+    filePath,
+    type: fileType,
+    providerMeta: {
+      routeName: "video_scene",
+      provider: route.provider || "",
+      model: route.model || "",
+      apiKind: route.apiKind || "",
+      endpoint: route.endpoint || "",
+      ...result.providerMeta,
+    },
+  };
+}
+
+function buildVideoSceneRequest(route, payload) {
+  if (route.apiKind === "chat_completions" || route.apiKind === "responses") {
+    return {
+      method: "POST",
+      headers: buildLlmHeaders(route),
+      body: JSON.stringify(buildScriptRequestBody(route, buildVideoScenePrompt(payload))),
+    };
+  }
+
+  return {
+    method: "POST",
+    headers: buildLlmHeaders(route),
+    body: JSON.stringify({
+      model: route.model,
+      scene: payload,
+      output: {
+        format: "mp4",
+      },
+    }),
+  };
+}
+
+function buildVideoScenePrompt(payload) {
+  return [
+    "你负责为竖屏中文行业视频生成单个 scene 的动态镜头资产。",
+    "不要返回解释，只返回 JSON。",
+    "返回格式：{\"video_url\":\"...\"} 或 {\"video_base64\":\"...\",\"video_type\":\"mp4\"}。",
+    "如果服务只能返回任务结果字段，也请把 providerMeta 一并放进 JSON。",
+    `sceneId：${payload.sceneId}`,
+    `镜头标题：${payload.sceneTitle}`,
+    `口播：${payload.narrationText}`,
+    `字幕：${payload.subtitleText}`,
+    `目标时长：${payload.desiredDuration} 秒`,
+    `镜头类型：${payload.shotType}`,
+    `画面意图：${payload.visualIntent}`,
+    `动态提示：${payload.motionHint}`,
+    `情绪基调：${payload.emotionTone}`,
+    `参考图片：${payload.referenceImages.join(", ") || "无"}`,
+  ].join("\n");
+}
+
+async function extractVideoSceneAsset(response, route) {
+  const contentType = String(response.headers.get("content-type") || "").trim().toLowerCase();
+  if (contentType.startsWith("video/")) {
+    return {
+      buffer: Buffer.from(await response.arrayBuffer()),
+      type: normalizeVideoAssetType(contentType.split("/")[1] || "mp4"),
+      providerMeta: {},
+    };
+  }
+
+  const data = await response.json();
+  const explicitBase64 = [
+    data?.video_base64,
+    data?.b64_video,
+    data?.base64,
+    data?.output?.video_base64,
+    data?.result?.video_base64,
+    data?.data?.video_base64,
+    data?.data?.[0]?.video_base64,
+    data?.data?.[0]?.b64_video,
+  ].find((value) => typeof value === "string" && value.trim());
+
+  if (explicitBase64) {
+    return {
+      buffer: Buffer.from(String(explicitBase64).trim(), "base64"),
+      type: normalizeVideoAssetType(
+        data?.video_type ||
+        data?.type ||
+        data?.output?.video_type ||
+        data?.result?.video_type ||
+        "mp4",
+      ),
+      providerMeta: normalizeVideoSceneProviderMeta(data, route),
+    };
+  }
+
+  const explicitUrl = [
+    data?.video_url,
+    data?.url,
+    data?.output?.video_url,
+    data?.result?.video_url,
+    data?.data?.video_url,
+    data?.data?.[0]?.url,
+    data?.data?.[0]?.video_url,
+  ].find((value) => typeof value === "string" && value.trim());
+
+  if (!explicitUrl) {
+    const textOutput = extractGenericRouteTextOutput(route, data);
+    const parsed = tryParseLooseJson(textOutput);
+    if (parsed) {
+      const parsedBase64 = String(parsed.video_base64 || parsed.b64_video || "").trim();
+      if (parsedBase64) {
+        return {
+          buffer: Buffer.from(parsedBase64, "base64"),
+          type: normalizeVideoAssetType(parsed.video_type || "mp4"),
+          providerMeta: normalizeVideoSceneProviderMeta(parsed, route),
+        };
+      }
+      const parsedUrl = String(parsed.video_url || parsed.url || "").trim();
+      if (parsedUrl) {
+        return downloadRemoteVideoAsset(parsedUrl, normalizeVideoAssetType(parsed.video_type || "mp4"), normalizeVideoSceneProviderMeta(parsed, route));
+      }
+    }
+    throw new Error("动态镜头响应未返回 video_url 或 video_base64");
+  }
+
+  return downloadRemoteVideoAsset(explicitUrl, "mp4", normalizeVideoSceneProviderMeta(data, route));
+}
+
+async function downloadRemoteVideoAsset(url, fallbackType = "mp4", providerMeta = {}) {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`动态镜头 URL 拉取失败：${response.status}`);
+  }
+  const contentType = String(response.headers.get("content-type") || "").trim().toLowerCase();
+  return {
+    buffer: Buffer.from(await response.arrayBuffer()),
+    type: normalizeVideoAssetType(contentType.split("/")[1] || fallbackType),
+    providerMeta,
+  };
+}
+
+function normalizeVideoAssetType(value) {
+  const normalized = String(value || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (normalized === "mov" || normalized === "webm" || normalized === "m4v") {
+    return normalized;
+  }
+  return "mp4";
+}
+
+function normalizeSceneOutputAssetType(value) {
+  const normalized = String(value || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (["png", "jpg", "jpeg", "webp", "svg", "mp4", "mov", "webm", "m4v"].includes(normalized)) {
+    return normalized;
+  }
+  return "mp4";
+}
+
+function normalizeVideoSceneProviderMeta(data, route) {
+  const source = data?.providerMeta || data?.provider_meta || data?.meta || data?.data?.meta || {};
+  return {
+    provider: String(source?.provider || route?.provider || "").trim(),
+    model: String(source?.model || route?.model || "").trim(),
+    requestId: String(source?.requestId || source?.request_id || "").trim(),
+    taskId: String(source?.taskId || source?.task_id || "").trim(),
+  };
+}
+
+function buildDefaultVideoSceneState(scene, context = {}) {
+  return {
+    ...buildVideoScenePayload(scene, context),
+    outputAsset: {
+      path: "",
+      type: "mp4",
+      durationSec: Math.max(4, Number(scene?.durationSec || 6)),
+    },
+    providerMeta: {},
+    status: awaitableStatusFromRouteContext(context),
+    error: "",
+  };
+}
+
+function awaitableStatusFromRouteContext(context = {}) {
+  if (context?.videoSceneStatus) {
+    return String(context.videoSceneStatus).trim();
+  }
+  return "idle";
+}
+
+function normalizeVideoSceneState(value, scene, context = {}) {
+  const payload = buildVideoScenePayload({
+    ...scene,
+    subtitleText: value?.subtitleText || scene?.subtitleText || "",
+  }, context);
+  const outputAsset = value?.outputAsset || {};
+  const providerMeta = value?.providerMeta || {};
+  const fallbackReferenceImages = uniqueArray([
+    ...payload.referenceImages,
+    ...toArray(value?.referenceImages),
+  ]);
+
+  return {
+    sceneId: String(value?.sceneId || payload.sceneId).trim(),
+    sceneTitle: String(value?.sceneTitle || payload.sceneTitle).trim(),
+    narrationText: String(value?.narrationText || payload.narrationText).trim(),
+    subtitleText: String(value?.subtitleText || payload.subtitleText).trim(),
+    desiredDuration: Math.max(4, Number(value?.desiredDuration || payload.desiredDuration || 6)),
+    shotType: String(value?.shotType || payload.shotType).trim() || payload.shotType,
+    visualIntent: String(value?.visualIntent || payload.visualIntent).trim(),
+    motionHint: String(value?.motionHint || payload.motionHint).trim(),
+    emotionTone: String(value?.emotionTone || payload.emotionTone).trim(),
+    referenceImages: fallbackReferenceImages,
+    referenceVideoClips: uniqueArray([
+      ...toArray(payload.referenceVideoClips),
+      ...toArray(value?.referenceVideoClips),
+    ]),
+    outputAsset: {
+      path: String(outputAsset?.path || value?.videoPath || scene?.videoPath || "").trim(),
+      type: normalizeSceneOutputAssetType(outputAsset?.type || value?.videoType || scene?.videoType || "mp4"),
+      durationSec: Math.max(4, Number(outputAsset?.durationSec || value?.desiredDuration || payload.desiredDuration || 6)),
+    },
+    providerMeta: {
+      provider: String(providerMeta?.provider || "").trim(),
+      model: String(providerMeta?.model || "").trim(),
+      requestId: String(providerMeta?.requestId || "").trim(),
+      taskId: String(providerMeta?.taskId || "").trim(),
+    },
+    status: normalizeVideoSceneStatus(value?.status),
+    error: String(value?.error || "").trim(),
+  };
+}
+
+function applyVideoSceneFallbackState(videoSceneState, scene, fallbackOutput = {}) {
+  const base = normalizeVideoSceneState(videoSceneState, scene, {
+    videoSceneStatus: videoSceneState?.status || "fallback",
+  });
+  return {
+    ...base,
+    outputAsset: {
+      ...base.outputAsset,
+      path: String(fallbackOutput?.fallbackPath || base.outputAsset.path || "").trim(),
+      type: String(fallbackOutput?.fallbackType || base.outputAsset.type || "png").trim(),
+    },
+    status: videoSceneState?.status === "error" ? "fallback" : normalizeVideoSceneStatus(videoSceneState?.status || "fallback"),
+  };
+}
+
+function normalizeVideoSceneStatus(value) {
+  if (["idle", "pending", "success", "fallback", "error", "disabled"].includes(value)) {
+    return value;
+  }
+  return "idle";
+}
+
+function toArray(value) {
+  return Array.isArray(value)
+    ? value.map((item) => String(item || "").trim()).filter(Boolean)
+    : [];
+}
+
+function uniqueArray(values) {
+  return [...new Set((values || []).map((item) => String(item || "").trim()).filter(Boolean))];
 }
 
 async function renderLocalSceneAsset(scenesDir, scene, context) {
@@ -2451,7 +3871,11 @@ async function renderLocalSceneAsset(scenesDir, scene, context) {
 
 async function ensureStoryboardRenderableAssets(storyboard) {
   for (const scene of storyboard || []) {
-    const assetPath = String(scene?.assetPath || "").trim();
+    const choice = resolveSceneExportAssetChoice(scene);
+    if (choice.assetMode !== "static") {
+      continue;
+    }
+    const assetPath = String(choice.path || "").trim();
     if (!assetPath) {
       continue;
     }
@@ -2463,6 +3887,31 @@ async function ensureStoryboardRenderableAssets(storyboard) {
 
     await ensureRasterizedSvgAsset(absoluteAssetPath);
   }
+}
+
+function buildSceneAssetReport(storyboard) {
+  const scenes = (storyboard || []).map((scene, index) => {
+    const choice = resolveSceneExportAssetChoice(scene);
+    return {
+      sceneId: String(scene?.id || `scene-${index + 1}`).trim(),
+      sceneTitle: String(scene?.sceneTitle || `镜头 ${index + 1}`).trim(),
+      assetMode: choice.assetMode,
+      materialType: normalizeMaterialType(scene?.materialType || deriveSceneMaterialType(scene)),
+      path: choice.relativePath,
+      type: choice.type,
+      hasDynamic: choice.hasDynamic,
+      hasStatic: choice.hasStatic,
+    };
+  });
+
+  return {
+    summary: {
+      dynamic: scenes.filter((scene) => scene.assetMode === "dynamic").length,
+      static: scenes.filter((scene) => scene.assetMode === "static").length,
+      missing: scenes.filter((scene) => scene.assetMode === "missing").length,
+    },
+    scenes,
+  };
 }
 
 async function ensureRasterizedSvgAsset(svgPath, options = {}) {
@@ -2508,7 +3957,9 @@ function refreshStoryboardCoverAsset(storyboard, coverPath) {
       ...scene,
       assetPath: coverPath || "",
       assetType: "cover",
-    };
+      videoPath: "",
+      videoType: "",
+      };
   });
 }
 
@@ -2526,6 +3977,7 @@ function buildTimelineFromStoryboard(storyboard, coverPath = "") {
       startSec,
       endSec: cursor,
       assetPath: scene.assetPath || (index === 0 && coverPath ? coverPath : ""),
+      videoPath: scene.videoPath || "",
       transition: index === 0 ? "cut" : "fade",
       overlay: scene.sceneTitle,
     };
@@ -2625,6 +4077,16 @@ function ensureDraftStructure(rawDraft) {
 
   if (!Array.isArray(draft.qualityChecks)) {
     draft.qualityChecks = [];
+    changed = true;
+  }
+
+  if (!Array.isArray(draft.sceneReviews)) {
+    draft.sceneReviews = [];
+    changed = true;
+  }
+
+  if (!Array.isArray(draft.sceneRepairs)) {
+    draft.sceneRepairs = [];
     changed = true;
   }
 
@@ -2860,7 +4322,27 @@ function ensureDraftStructure(rawDraft) {
   }
   if (!draft.storyboard.length && draft.productionStage !== "script") {
     draft.storyboard = buildStoryboardFromDraft(draft);
+    syncDraftMaterialType(draft);
     changed = true;
+  } else if (draft.storyboard.length) {
+    const normalizedStoryboard = normalizeStoryboardInput(draft.storyboard, draft);
+    if (JSON.stringify(normalizedStoryboard) !== JSON.stringify(draft.storyboard)) {
+      draft.storyboard = normalizedStoryboard;
+      changed = true;
+    }
+    const derivedMaterialType = deriveDraftMaterialType(draft.storyboard);
+    if (derivedMaterialType !== draft.materialType) {
+      draft.materialType = derivedMaterialType;
+      changed = true;
+    }
+  }
+
+  if (!draft.storyboard.length) {
+    const normalizedMaterialType = normalizeMaterialType(draft.materialType, "static_asset");
+    if (normalizedMaterialType !== draft.materialType) {
+      draft.materialType = normalizedMaterialType;
+      changed = true;
+    }
   }
 
   if (!Array.isArray(draft.timeline)) {
@@ -2946,7 +4428,7 @@ async function persistDraft(draftId, draft, options = {}) {
 
 async function ensureDraftSceneAssets(draft, draftDir) {
   const storyboard = Array.isArray(draft.storyboard) ? draft.storyboard : [];
-  const missingAsset = storyboard.some((scene) => scene.visualType !== "cover" && !scene.assetPath);
+  const missingAsset = storyboard.some((scene) => scene.visualType !== "cover" && !scene.assetPath && !scene.videoPath);
 
   if (!missingAsset) {
     const refreshedStoryboard = refreshStoryboardCoverAsset(storyboard, draft.assets?.coverPath || "");
@@ -2990,15 +4472,27 @@ function normalizeStoryboardInput(inputStoryboard, draft) {
       const currentScene = currentSceneMap.get(scene?.id) || currentScenes[index] || {};
       const visualType = normalizeSceneVisualType(scene?.visualType || currentScene.visualType || "image");
       const durationSec = clamp(Math.round(Number(scene?.durationSec || currentScene.durationSec || 6)), 4, 40);
-
-      return {
+      const normalizedScene = {
         ...currentScene,
+        ...scene,
+        ...normalizeSceneSchema(scene, draft, currentScene),
         id: String(scene?.id || currentScene.id || `scene-${index + 1}`).trim(),
         sceneTitle: String(scene?.sceneTitle || currentScene.sceneTitle || `镜头 ${index + 1}`).trim(),
         voiceover: String(scene?.voiceover || currentScene.voiceover || "").trim(),
         visualType,
         visualPrompt: String(scene?.visualPrompt || currentScene.visualPrompt || "").trim(),
         durationSec,
+        videoPath: String(scene?.videoPath || currentScene.videoPath || "").trim(),
+        videoType: String(scene?.videoType || currentScene.videoType || "").trim(),
+        materialType: normalizeMaterialType(scene?.materialType || currentScene.materialType || deriveSceneMaterialType({ ...currentScene, ...scene })),
+      };
+
+      return {
+        ...normalizedScene,
+        videoScene: normalizeVideoSceneState(scene?.videoScene || currentScene.videoScene, normalizedScene, {
+          coverPath: draft.assets?.coverPath || "",
+          angle: draft.angle,
+        }),
       };
     })
     .filter((scene) => scene.voiceover);
@@ -4701,7 +6195,8 @@ function buildSceneFilterStep(scene, index, fontPath) {
   const duration = Math.max(4, Number(scene.durationSec || 6));
   const fadeDuration = Math.min(0.42, Math.max(0.24, duration * 0.08));
   const fadeOutStart = Math.max(0, duration - fadeDuration);
-  const baseChain = sceneHasVisualAsset(scene)
+  const choice = resolveSceneExportAssetChoice(scene);
+  const baseChain = choice.assetMode !== "missing"
     ? `[${index}:v]scale=1080:1920:force_original_aspect_ratio=decrease:eval=frame,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=#08131b`
     : `[${index}:v]format=yuv420p`;
 
@@ -4714,11 +6209,17 @@ function buildSceneFilterStep(scene, index, fontPath) {
 
 function buildSceneInputSpec(scene) {
   const duration = Number(scene.durationSec || 6).toFixed(2);
+  const choice = resolveSceneExportAssetChoice(scene);
 
-  if (sceneHasVisualAsset(scene)) {
-    const assetPath = resolveSceneRenderableAssetPath(scene);
+  if (choice.assetMode === "dynamic" && choice.path) {
     return {
-      inputLine: `-loop 1 -t ${duration} -i "${assetPath}"`,
+      inputLine: `-stream_loop -1 -t ${duration} -i "${choice.path}"`,
+    };
+  }
+
+  if (choice.assetMode === "static" && choice.path) {
+    return {
+      inputLine: `-loop 1 -t ${duration} -i "${choice.path}"`,
     };
   }
 
@@ -4727,15 +6228,57 @@ function buildSceneInputSpec(scene) {
   };
 }
 
+function sceneHasVideoAsset(scene) {
+  return resolveSceneExportAssetChoice(scene).assetMode === "dynamic";
+}
+
 function sceneHasVisualAsset(scene) {
-  const assetPath = resolveSceneRenderableAssetPath(scene).toLowerCase();
-  return (
-    assetPath.endsWith(".png") ||
-    assetPath.endsWith(".jpg") ||
-    assetPath.endsWith(".jpeg") ||
-    assetPath.endsWith(".webp") ||
-    assetPath.endsWith(".svg")
-  );
+  const choice = resolveSceneExportAssetChoice(scene);
+  return choice.assetMode === "static";
+}
+
+function resolveSceneExportAssetChoice(scene) {
+  const dynamicPath = resolveSceneVideoAssetPath(scene);
+  const staticPath = resolveSceneRenderableAssetPath(scene);
+  const hasDynamic = Boolean(dynamicPath);
+  const hasStatic = Boolean(staticPath);
+  if (hasDynamic) {
+    return {
+      assetMode: "dynamic",
+      path: dynamicPath,
+      relativePath: String(scene?.videoPath || scene?.videoScene?.outputAsset?.path || "").trim(),
+      type: String(scene?.videoType || scene?.videoScene?.outputAsset?.type || "mp4").trim(),
+      hasDynamic,
+      hasStatic,
+    };
+  }
+  if (hasStatic) {
+    return {
+      assetMode: "static",
+      path: staticPath,
+      relativePath: String(scene?.assetPath || "").trim(),
+      type: String(scene?.assetType || path.extname(staticPath).replace(/^\./, "") || "png").trim(),
+      hasDynamic,
+      hasStatic,
+    };
+  }
+  return {
+    assetMode: "missing",
+    path: "",
+    relativePath: "",
+    type: "",
+    hasDynamic,
+    hasStatic,
+  };
+}
+
+function resolveSceneVideoAssetPath(scene) {
+  const videoPath = String(scene?.videoPath || scene?.videoScene?.outputAsset?.path || "").trim();
+  if (!videoPath) {
+    return "";
+  }
+  const absoluteVideoPath = path.isAbsolute(videoPath) ? videoPath : path.join(rootDir, videoPath);
+  return existsSync(absoluteVideoPath) ? absoluteVideoPath : "";
 }
 
 function resolveSceneRenderableAssetPath(scene) {
@@ -4745,6 +6288,9 @@ function resolveSceneRenderableAssetPath(scene) {
   }
 
   const absoluteAssetPath = path.isAbsolute(assetPath) ? assetPath : path.join(rootDir, assetPath);
+  if (!existsSync(absoluteAssetPath)) {
+    return "";
+  }
   if (absoluteAssetPath.toLowerCase().endsWith(".svg")) {
     const rasterizedAssetPath = `${absoluteAssetPath}.png`;
     if (existsSync(rasterizedAssetPath)) {
@@ -5067,7 +6613,7 @@ export async function saveLlmConfig(input) {
 
 export async function testLlmRoute(input) {
   const routeName = String(input?.routeName || "").trim();
-  const allowedRoutes = new Set(["script", "storyboard", "image", "tts", "transcription", "moderation"]);
+  const allowedRoutes = new Set(["script", "storyboard", "video_scene", "image", "tts", "transcription", "moderation"]);
 
   if (!allowedRoutes.has(routeName)) {
     throw new Error("无效的调用点。");
@@ -5094,8 +6640,8 @@ export async function testLlmRoute(input) {
     return {
       ok: false,
       tone: "error",
-      title: "缺少策略服务名",
-      message: "请先填写风控服务名。",
+      title: routeName === "moderation" ? "缺少策略服务名" : "缺少模型名",
+      message: routeName === "moderation" ? "请先填写风控服务名。" : "请先填写模型名。",
     };
   }
 
@@ -5249,6 +6795,30 @@ export async function testLlmRoute(input) {
 }
 
 function buildRouteTestRequest(routeName, route) {
+  if (routeName === "video_scene") {
+    return buildVideoSceneRequest(route, {
+      sceneId: "scene-test",
+      sceneTitle: "测试镜头",
+      narrationText: "测试镜头口播",
+      subtitleText: "测试镜头口播",
+      desiredDuration: 6,
+      shotType: "opener",
+      visualIntent: "蓝色科技实验室场景，轻微动态镜头",
+      motionHint: "镜头轻微推进",
+      emotionTone: "专业、克制",
+      referenceImages: [],
+      referenceVideoClips: [],
+      outputAsset: {
+        path: "",
+        type: "mp4",
+        durationSec: 6,
+      },
+      providerMeta: {},
+      status: "pending",
+      error: "",
+    });
+  }
+
   if (routeName === "image") {
     return buildImageRequest(route, "simple blue square");
   }
@@ -5340,6 +6910,18 @@ function buildDefaultLlmConfig() {
       apiKind: envValue("OPENAI_STORYBOARD_API_KIND", envValue("OPENAI_TEXT_API_KIND", "responses")),
       endpoint: envValue("OPENAI_STORYBOARD_ENDPOINT", envValue("OPENAI_TEXT_ENDPOINT", "/v1/responses")),
       model: envValue("OPENAI_STORYBOARD_MODEL", envValue("OPENAI_TEXT_MODEL", "gpt-5.2")),
+    },
+    video_scene: {
+      provider: envValue("OPENAI_VIDEO_SCENE_PROVIDER", envValue("LLM_BASE_PROVIDER", "openai-compatible")),
+      baseURL: envValue("OPENAI_VIDEO_SCENE_BASE_URL", envValue("OPENAI_BASE_URL", "https://api.openai.com")),
+      apiKey: envValue("OPENAI_VIDEO_SCENE_API_KEY", envValue("OPENAI_API_KEY", "")),
+      authHeader: envValue("OPENAI_VIDEO_SCENE_AUTH_HEADER", envValue("OPENAI_AUTH_HEADER", "Authorization")),
+      authScheme: envValue("OPENAI_VIDEO_SCENE_AUTH_SCHEME", envValue("OPENAI_AUTH_SCHEME", "Bearer")),
+      timeoutSec: envValue("OPENAI_VIDEO_SCENE_TIMEOUT_SEC", "90"),
+      enabled: false,
+      apiKind: envValue("OPENAI_VIDEO_SCENE_API_KIND", "native"),
+      endpoint: envValue("OPENAI_VIDEO_SCENE_ENDPOINT", "/v1/video/scenes"),
+      model: envValue("OPENAI_VIDEO_SCENE_MODEL", ""),
     },
     image: {
       provider: envValue("OPENAI_IMAGE_PROVIDER", envValue("LLM_BASE_PROVIDER", "openai-compatible")),
@@ -5581,7 +7163,15 @@ async function fetchWithRoute(route, url, options = {}) {
 
 function resolveRouteTimeoutMs(route) {
   const routeName = route?.routeName || "";
-  const fallbackSec = routeName === "image" || routeName === "tts" ? 45 : routeName === "moderation" ? 15 : routeName === "storyboard" ? 25 : 20;
+  const fallbackSec = routeName === "video_scene"
+    ? 90
+    : routeName === "image" || routeName === "tts"
+      ? 45
+      : routeName === "moderation"
+        ? 15
+        : routeName === "storyboard"
+          ? 25
+          : 20;
   const parsed = Number(route?.timeoutSec);
   const timeoutSec = Number.isFinite(parsed) && parsed > 0 ? parsed : fallbackSec;
   return timeoutSec * 1000;
@@ -5602,6 +7192,9 @@ function applyMinimumRouteTimeout(route, minimumSec) {
 function getRouteDisplayName(routeName) {
   if (routeName === "storyboard") {
     return "分镜模型";
+  }
+  if (routeName === "video_scene") {
+    return "动态镜头模型";
   }
   if (routeName === "image") {
     return "图片模型";
@@ -5688,6 +7281,7 @@ function buildRuntimeLlmSummary(config, routes) {
   return {
     script: summarizeLlmRoute(routes.scriptRoute),
     storyboard: summarizeLlmRoute(routes.storyboardRoute),
+    video_scene: summarizeLlmRoute(routes.videoSceneRoute),
     image: summarizeLlmRoute(routes.imageRoute),
     tts: summarizeLlmRoute(routes.ttsRoute),
     transcription: summarizeLlmRoute(routes.transcriptionRoute),
@@ -5699,11 +7293,12 @@ async function getLlmConfigValidationSummary(config = null) {
   const activeConfig = config || (await getLlmConfig());
   const scriptRoute = await resolveLlmRouteConfig("script", activeConfig);
   const storyboardRoute = await resolveLlmRouteConfig("storyboard", activeConfig);
+  const videoSceneRoute = await resolveLlmRouteConfig("video_scene", activeConfig);
   const imageRoute = await resolveLlmRouteConfig("image", activeConfig);
   const ttsRoute = await resolveLlmRouteConfig("tts", activeConfig);
   const transcriptionRoute = await resolveLlmRouteConfig("transcription", activeConfig);
   const moderationRoute = await resolveLlmRouteConfig("moderation", activeConfig);
-  return validateLlmConfig(activeConfig, { scriptRoute, storyboardRoute, imageRoute, ttsRoute, transcriptionRoute, moderationRoute });
+  return validateLlmConfig(activeConfig, { scriptRoute, storyboardRoute, videoSceneRoute, imageRoute, ttsRoute, transcriptionRoute, moderationRoute });
 }
 
 function validateLlmConfig(config, routes) {
@@ -5712,6 +7307,7 @@ function validateLlmConfig(config, routes) {
   for (const [routeName, route] of Object.entries({
     script: routes.scriptRoute,
     storyboard: routes.storyboardRoute,
+    video_scene: routes.videoSceneRoute,
     image: routes.imageRoute,
     tts: routes.ttsRoute,
     transcription: routes.transcriptionRoute,
@@ -5758,6 +7354,15 @@ function validateLlmRoute(routeName, route, rawRoute) {
     }
     if (!route?.apiKey) {
       issues.push({ level: "error", routeName, field: "apiKey", message: `${displayName}缺少 API Key。` });
+    }
+  }
+
+  if (routeName === "video_scene") {
+    if (!route?.model) {
+      issues.push({ level: "error", routeName, field: "model", message: "动态镜头模型缺少 model。"});
+    }
+    if (!route?.apiKey) {
+      issues.push({ level: "error", routeName, field: "apiKey", message: "动态镜头模型缺少 API Key。"});
     }
   }
 

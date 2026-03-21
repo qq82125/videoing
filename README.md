@@ -13,6 +13,7 @@
 - 面向 `IVD` 行业内容生产，不是通用剪辑器
 - 本地运行，草稿、音频、封面、镜头和导出脚本都落在本地
 - 先低成本确认脚本，再逐步生成口播、封面和镜头
+- 镜头层同时支持 `静态试产` 和 `动态试产`
 - 支持反复修订文案、封面和镜头，而不是一条链跑完就锁死
 - 已内置一组针对真实工作流的回归脚本
 
@@ -53,8 +54,8 @@ http://127.0.0.1:3016
 | 选题与脚本 | 输入主题或标题/正文，生成脚本与标题方案 |
 | 口播与字幕 | 生成音频、字幕切分和试听 |
 | 封面 | 纯背景图 + 系统硬叠字，支持多版本背景和排版微调 |
-| 镜头 | 先形成固定首轮 storyboard，再逐镜补素材与精修 |
-| 导出 | 导出前质检、导出脚本、可直接出片 |
+| 镜头 | 先形成固定首轮 storyboard，再逐镜补素材、动态试产与精修 |
+| 导出 | 导出前质检、scene asset report、动态优先导出 |
 
 ## 项目定位
 
@@ -82,6 +83,7 @@ http://127.0.0.1:3016
    - 先生成 `口播 / 字幕`
    - 再生成 `封面`
    - 再按需补 `当前镜头素材`
+   - 也可以单独触发 `动态试产`
    - 同一区域里查看预览、字幕切分、封面和导出前检查
 
 3. `需要时先改文案`
@@ -93,9 +95,11 @@ http://127.0.0.1:3016
 
 4. `最后进入镜头精修工作台`
    - 查看 `scene` 列表
-   - 逐镜查看当前素材
+   - 逐镜查看当前素材类型：`dynamic / static / mixed`
+   - 逐镜查看 `scene review` 状态
    - 调整镜头标题、类型、时长、口播
    - 按需局部重做当前镜头
+   - 按需执行 `动态重建当前镜头`
 
 5. `准备出片前再检查`
    - 执行导出前质检
@@ -116,6 +120,8 @@ http://127.0.0.1:3016
 - 生成 `口播 / 字幕`
 - 生成 `封面`
 - 生成并重做单个镜头素材
+- 执行 `动态试产`，为 scene 级镜头优先生成动态视频素材
+- 对单个 scene 执行 `动态重建`
 - 在页面内直接修改：
   - 标题
   - Hook / 正文 / CTA
@@ -126,6 +132,7 @@ http://127.0.0.1:3016
 - 保留草稿历史并继续生产
 - 执行导出前检查
 - 生成导出脚本并在本机/容器内直接出片
+- 在导出前看到每个 scene 的素材来源摘要：`dynamic / static / missing`
 
 ## 不适合什么
 
@@ -162,6 +169,46 @@ http://127.0.0.1:3016
 - 前台镜头按钮是**逐镜补素材**，不是“一键全量生成全部镜头”
 - 每补完当前镜头，页面会自动切到下一个待补镜头
 - 全部镜头补齐后，再进入第四步做逐镜精修
+- `storyboard scene` 已升级成统一 schema，同时可驱动：
+  - `image` 静态图链
+  - `video_scene` 动态镜头链
+- 当前镜头支持三种素材状态：
+  - `static_asset`
+  - `dynamic_video_asset`
+  - `mixed`
+
+## 动态镜头链路现状
+
+当前仓库已经新增第 6 个模型调用点：
+
+- `video_scene`：scene 级动态视频镜头生成
+
+当前动态镜头能力的边界是：
+
+- 只做 `scene` 级动态镜头，不做整片一键黑盒生成
+- 保留旧静态镜头链，便于稳定回退
+- `image` 从“主视频素材来源”降级为：
+  - 封面素材
+  - scene keyframe / 静态参考
+  - `video_scene` 失败时的 fallback
+
+当前已接好的执行路径：
+
+- `动态试产`
+  - 对当前 storyboard 的 scene 逐个尝试生成动态镜头
+- `动态重建当前镜头`
+  - 只重建当前 scene
+- `scene review / repair`
+  - 先 review 当前 scene
+  - 再按问题做最小 repair
+  - 最后重建当前 scene
+
+当前前台已经能看到：
+
+- scene 素材类型：`dynamic / static / mixed`
+- 当前 scene review 状态
+- 动态试产入口
+- 当前镜头动态重建入口
 
 默认的 6 个 scene 大致是：
 
@@ -257,6 +304,7 @@ http://127.0.0.1:3016
 - `script`：文案生成
 - `storyboard`：镜头规划
 - `image`：图片生成
+- `video_scene`：scene 级动态视频生成
 - `tts`：配音生成
 - `transcription`：音频转写/对齐
 - `moderation`：审核与合规预检
@@ -308,6 +356,7 @@ http://127.0.0.1:3016
 - `voice.mp3`
 - `subtitles.srt`
 - `cover.svg / cover.png`
+- `scenes/scene-*.mp4`（若动态镜头生成成功）
 - `scenes/scene-*.svg|png`
 - `export-video.sh`
 - `final-video.mp4`（如果成功导出）
@@ -324,6 +373,7 @@ npm run regression:assets
 npm run regression:preview-audio
 npm run regression:cover-compose
 npm run regression:storyboard
+npm run regression:video-scene
 ```
 
 各自关注点：
@@ -342,6 +392,8 @@ npm run regression:storyboard
   - 封面背景与叠字链路
 - `regression:storyboard`
   - storyboard 补素材与第四步工作台联动
+- `regression:video-scene`
+  - 动态镜头生成、动态优先导出、fallback 与 scene review / repair
 
 ## 当前已知边界
 
@@ -349,6 +401,8 @@ npm run regression:storyboard
 
 - 镜头首轮仍以固定骨架为主，不是完全自由编排
 - 镜头生产当前更偏“逐镜补素材”，不是一键全量整轮生成
+- 动态镜头当前是 scene 级增强，不是完整视频生成器
+- 动态镜头 provider 不可用时，会自动回退到静态镜头链
 - 图片模型仍可能偶发生成伪文字或不够稳定的背景
 - 前后端预览与最终栅格化虽然已经尽量拉齐，但字体渲染仍可能有轻微差异
 - 本地环境缺少 ffmpeg 时只能生成导出脚本，不能直接出片
@@ -373,6 +427,10 @@ npm run regression:storyboard
 - 封面工作流改成“纯背景 + 硬叠字”
 - 第三步文案区改成更贴合主逻辑的修订工作台
 - 镜头区补了“逐镜补素材并自动推进”的流程
+- 新增 `video_scene` 第 6 个调用点
+- 镜头 schema 升级为静态 / 动态共用结构
+- 动态试产、动态重建当前镜头、scene review / repair 已接入
+- 导出前检查与导出准备改成“动态优先、静态回退”
 
 ## 推荐使用顺序
 

@@ -6138,9 +6138,52 @@ audio.is-hidden {
   min-height: 20px;
   padding: 0 7px;
   border-radius: 999px;
+  border: 1px solid transparent;
   background: rgba(255, 255, 255, 0.05);
   color: var(--muted);
   font-size: 10px;
+}
+
+.storyboard-scene-meta span.is-dynamic,
+.storyboard-panel-chip.is-dynamic {
+  border-color: rgba(108, 213, 255, 0.18);
+  background: rgba(108, 213, 255, 0.12);
+  color: var(--accent);
+}
+
+.storyboard-scene-meta span.is-static,
+.storyboard-panel-chip.is-static {
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--muted);
+}
+
+.storyboard-scene-meta span.is-mixed,
+.storyboard-panel-chip.is-mixed {
+  border-color: rgba(255, 215, 124, 0.18);
+  background: rgba(255, 215, 124, 0.12);
+  color: #f2d084;
+}
+
+.storyboard-scene-meta span.is-warning,
+.storyboard-panel-chip.is-warning {
+  border-color: rgba(255, 180, 124, 0.18);
+  background: rgba(255, 180, 124, 0.12);
+  color: #f3bf8f;
+}
+
+.storyboard-scene-meta span.is-ready,
+.storyboard-panel-chip.is-ready {
+  border-color: rgba(124, 232, 178, 0.18);
+  background: rgba(124, 232, 178, 0.12);
+  color: #8ce3b7;
+}
+
+.storyboard-scene-meta span.is-idle,
+.storyboard-panel-chip.is-idle,
+.storyboard-scene-meta span.is-missing,
+.storyboard-panel-chip.is-missing {
+  opacity: 0.76;
 }
 
 .storyboard-scene-note {
@@ -6197,6 +6240,12 @@ audio.is-hidden {
   color: var(--muted-strong);
   font-size: 12px;
   line-height: 1.58;
+}
+
+.storyboard-decision-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .storyboard-decision-metrics {

@@ -31,7 +31,7 @@ export function renderReleaseControl(draft, deps) {
   const videoReady = Boolean(exportInfo.videoReady);
   const hasAudioAssets = Boolean(draft?.assets?.voicePath) || Boolean(draft?.audioUrl) || Boolean((draft?.subtitleEntries || []).length);
   const hasCoverAssets = Boolean(draft?.assets?.coverPath) || Boolean(draft?.coverImage);
-  const hasSceneAssets = Boolean((draft?.storyboard || []).some((scene) => scene?.assetPath));
+  const hasSceneAssets = Boolean((draft?.storyboard || []).some((scene) => scene?.videoPath || scene?.assetPath));
   const hasCoreProductionAssets = hasAudioAssets && hasCoverAssets && hasSceneAssets;
   const effectiveStage = currentProductionStage === "script" && (hasAudioAssets || hasCoverAssets || hasSceneAssets)
     ? "production"
@@ -131,6 +131,11 @@ export function renderQualityOverview(checks, draft, deps) {
         ? "当前医疗预检和导出条件都已通过。如果成片预览没有问题，可以直接进入最终导出。"
         : "当前检查未发现阻塞项，可以进入导出或最后复核。";
     }
+  }
+
+  const assetSummary = draft?.sceneAssetReport?.summary;
+  if (assetSummary && typeof assetSummary === "object") {
+    text = `${text} 当前 scene 素材：dynamic ${Number(assetSummary.dynamic || 0)} / static ${Number(assetSummary.static || 0)} / missing ${Number(assetSummary.missing || 0)}。`;
   }
 
   const showReadyAction = status === "ready" && !draft?.exportInfo?.videoReady;

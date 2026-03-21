@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>IVD 视频工作流 Admin</title>
-    <link rel="stylesheet" href="/style.css?v=20260320-admin-nav-fix" />
+    <link rel="stylesheet" href="/style.css?v=20260321-video-scene-config-1" />
   </head>
   <body>
     <div class="site-shell">
@@ -43,7 +43,7 @@
                   <span class="admin-nav-index">02</span>
                   <span class="admin-nav-copy">
                     <strong>模型与供应商</strong>
-                    <small>文案、分镜、即梦图片与豆包语音。</small>
+                    <small>文案、分镜、动态镜头、即梦图片与豆包语音。</small>
                   </span>
                 </button>
               </div>
@@ -101,7 +101,7 @@
                 <section class="panel admin-panel admin-panel-wide">
                   <div class="section-head">
                     <h2>模型与供应商</h2>
-                    <p>这里专注管理真正参与生成的供应商：文案、分镜、即梦图片、豆包语音和转写校准。</p>
+                    <p>这里专注管理真正参与生成的供应商：文案、分镜、动态镜头、即梦图片、豆包语音和转写校准。</p>
                   </div>
                   <div id="admin-provider-summary" class="admin-provider-summary"></div>
                   <section class="panel llm-config-panel rail-secondary-panel admin-inner-panel">
@@ -172,6 +172,35 @@
                       <label><span>更新 API Key</span><input id="llm-storyboard-api-key" type="password" placeholder="留空表示保持当前值" /></label>
                     </details>
                     <label class="llm-config-span-2"><span>协议/提供方</span><input id="llm-storyboard-provider" placeholder="openai-compatible" /></label>
+                  </div>
+                </details>
+              </details>
+
+              <details class="llm-config-group">
+                <summary>动态镜头调用点</summary>
+                <div class="llm-config-toggles">
+                  <label class="style-option checkbox-option"><input id="llm-video-scene-enabled" type="checkbox" /><span>启用该调用点</span></label>
+                  <button type="button" class="switch-btn llm-test-btn" data-llm-test-route="video_scene">测试连接</button>
+                </div>
+                <p id="llm-video-scene-test-status" class="llm-test-status llm-test-status-idle">还没有测试过这个调用点。</p>
+                <div class="llm-config-note">这块只负责单个 scene 的动态视频镜头生成，不承担整片视频生成。失败时会自动回退到静态图方案。</div>
+                <div class="llm-config-grid">
+                  <label><span>接口类型</span><select id="llm-video-scene-api-kind"><option value="native">native</option><option value="responses">responses</option><option value="chat_completions">chat_completions</option></select></label>
+                  <label><span>模型名</span><input id="llm-video-scene-model" placeholder="例如：scene-video-v1" /></label>
+                  <label class="llm-config-span-2"><span>完整接口地址或相对路径</span><input id="llm-video-scene-endpoint" placeholder="/v1/video/scenes 或完整代理地址" /></label>
+                </div>
+                <details class="llm-config-advanced">
+                  <summary>高级设置</summary>
+                  <div class="llm-config-grid">
+                    <label><span>网关主地址（可选）</span><input id="llm-video-scene-base-url" placeholder="https://your-gateway" /></label>
+                    <label><span>鉴权头</span><input id="llm-video-scene-auth-header" placeholder="Authorization" /></label>
+                    <label><span>鉴权方式</span><select id="llm-video-scene-auth-scheme"><option value="Bearer">Bearer</option><option value="Token">Token</option><option value="">Raw Token</option></select></label>
+                    <label><span>超时（秒）</span><input id="llm-video-scene-timeout-sec" type="number" min="1" step="1" placeholder="90" /></label>
+                    <details class="llm-config-secret llm-config-span-2">
+                      <summary id="llm-video-scene-api-key-status">API Key：未配置</summary>
+                      <label><span>更新 API Key</span><input id="llm-video-scene-api-key" type="password" placeholder="留空表示保持当前值" /></label>
+                    </details>
+                    <label class="llm-config-span-2"><span>协议/提供方</span><input id="llm-video-scene-provider" placeholder="openai-compatible 或你的 scene-video provider" /></label>
                   </div>
                 </details>
               </details>
@@ -388,6 +417,6 @@
         </section>
       </main>
     </div>
-    <script type="module" src="/admin.js?v=20260320-admin-nav-fix"></script>
+    <script type="module" src="/admin.js?v=20260321-video-scene-config-1"></script>
   </body>
 </html>

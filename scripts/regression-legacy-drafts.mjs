@@ -15,6 +15,7 @@ const {
 const disabledLlmConfig = {
   script: { enabled: false },
   storyboard: { enabled: false },
+  video_scene: { enabled: false },
   image: { enabled: false },
   tts: { enabled: false },
   transcription: { enabled: false },

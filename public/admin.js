@@ -34,7 +34,7 @@ const ADMIN_SECTION_META = {
   },
   models: {
     title: "模型与供应商",
-    description: "集中维护文案、分镜、即梦图片、豆包语音和转写校准，减少在生产页来回切换。",
+    description: "集中维护文案、分镜、动态镜头、即梦图片、豆包语音和转写校准，减少在生产页来回切换。",
   },
   risk: {
     title: "风控策略",
@@ -280,6 +280,9 @@ function getRuntimeRouteActiveLabel(title, route) {
   if (title === "文案模型" || title === "分镜模型") {
     if (provider === "openai-compatible") return "文本远程生效";
   }
+  if (title === "动态镜头模型") {
+    if (provider === "openai-compatible") return "动态镜头远程生效";
+  }
   if (title === "转写模型") {
     if (provider === "volcengine-doubao-asr" || provider === "doubao-asr" || provider.includes("bigasr")) return "火山转写生效";
   }
@@ -313,6 +316,18 @@ function renderLlmConfig(config) {
   setInputValue("llm-storyboard-api-kind", config.storyboard?.apiKind || config.script?.apiKind || "responses");
   setInputValue("llm-storyboard-model", config.storyboard?.model || "");
   setInputValue("llm-storyboard-endpoint", config.storyboard?.endpoint || "");
+
+  setCheckboxValue("llm-video-scene-enabled", config.video_scene?.enabled === true);
+  setInputValue("llm-video-scene-provider", config.video_scene?.provider || "");
+  setInputValue("llm-video-scene-base-url", config.video_scene?.baseURL || "");
+  setInputValue("llm-video-scene-auth-header", config.video_scene?.authHeader || "");
+  setInputValue("llm-video-scene-auth-scheme", config.video_scene?.authScheme || "");
+  setInputValue("llm-video-scene-timeout-sec", config.video_scene?.timeoutSec || "90");
+  setInputValue("llm-video-scene-api-key", config.video_scene?.apiKey ? "***" : "");
+  setTextValue("llm-video-scene-api-key-status", config.video_scene?.apiKey ? "API Key：已配置" : "API Key：未配置");
+  setInputValue("llm-video-scene-api-kind", config.video_scene?.apiKind || "native");
+  setInputValue("llm-video-scene-model", config.video_scene?.model || "");
+  setInputValue("llm-video-scene-endpoint", config.video_scene?.endpoint || "/v1/video/scenes");
 
   setCheckboxValue("llm-image-enabled", config.image?.enabled !== false);
   setInputValue("llm-image-provider", config.image?.provider || "volcengine-jimeng-image");
@@ -461,6 +476,7 @@ function buildLlmRouteDebugSummary(routeName) {
 }
 
 function getDefaultRouteTimeoutSec(routeName) {
+  if (routeName === "video_scene") return "90";
   if (routeName === "image" || routeName === "tts") return "45";
   if (routeName === "transcription") return "90";
   if (routeName === "moderation") return "15";
@@ -615,6 +631,7 @@ function renderAdminProviderSummary() {
   adminProviderSummary.innerHTML = [
     buildProviderSummaryCard("文本生成", runtimeSnapshot.llm.script, runtimeSnapshot.textModel || "-", "文案"),
     buildProviderSummaryCard("分镜生成", runtimeSnapshot.llm.storyboard, storyboardModelLabel, "分镜"),
+    buildProviderSummaryCard("动态镜头", runtimeSnapshot.llm.video_scene, runtimeSnapshot.videoSceneModel || "-", "scene 级视频"),
     buildProviderSummaryCard("即梦图片", runtimeSnapshot.llm.image, runtimeSnapshot.imageModel || "-", "封面 / 分镜"),
     buildProviderSummaryCard("豆包语音", runtimeSnapshot.llm.tts, runtimeSnapshot.ttsModel || "-", "配音"),
     buildProviderSummaryCard("字幕校准", runtimeSnapshot.llm.transcription, runtimeSnapshot.llm.transcription?.model || runtimeSnapshot.transcriptionModel || "-", "转写"),
@@ -697,6 +714,7 @@ function getValidationToneLabel(tone) {
 function getValidationRouteLabel(routeName) {
   if (routeName === "script") return "文案模型";
   if (routeName === "storyboard") return "分镜模型";
+  if (routeName === "video_scene") return "动态镜头模型";
   if (routeName === "image") return "图片模型";
   if (routeName === "tts") return "配音模型";
   if (routeName === "transcription") return "转写模型";
@@ -760,6 +778,7 @@ function buildActiveProviderList(runtime) {
   const tags = [
     getRuntimeRouteActiveLabel("文案模型", runtime.llm.script) ? `文案 ${runtime.textModel || "-"}` : "",
     getRuntimeRouteActiveLabel("分镜模型", runtime.llm.storyboard) ? `分镜 ${runtime.storyboardModel || runtime.textModel || "-"}` : "",
+    getRuntimeRouteActiveLabel("动态镜头模型", runtime.llm.video_scene) ? `动态镜头 ${runtime.videoSceneModel || "-"}` : "",
     getRuntimeRouteActiveLabel("封面模型", runtime.llm.image) ? "即梦图片" : "",
     getRuntimeRouteActiveLabel("配音模型", runtime.llm.tts) ? "豆包语音" : "",
     getRuntimeRouteActiveLabel("转写模型", runtime.llm.transcription) ? "字幕校准" : "",
@@ -896,6 +915,18 @@ function collectLlmConfig() {
       apiKind: getInputValue("llm-storyboard-api-kind"),
       model: getInputValue("llm-storyboard-model"),
       endpoint: getInputValue("llm-storyboard-endpoint"),
+    },
+    video_scene: {
+      provider: getInputValue("llm-video-scene-provider"),
+      baseURL: getInputValue("llm-video-scene-base-url"),
+      authHeader: getInputValue("llm-video-scene-auth-header"),
+      authScheme: getInputValue("llm-video-scene-auth-scheme"),
+      timeoutSec: getInputValue("llm-video-scene-timeout-sec"),
+      apiKey: getInputValue("llm-video-scene-api-key"),
+      enabled: getCheckboxValue("llm-video-scene-enabled"),
+      apiKind: getInputValue("llm-video-scene-api-kind"),
+      model: getInputValue("llm-video-scene-model"),
+      endpoint: getInputValue("llm-video-scene-endpoint"),
     },
     image: {
       provider: getInputValue("llm-image-provider"),

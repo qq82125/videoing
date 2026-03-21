@@ -16,12 +16,14 @@ import {
   updateDraftContent,
   syncDraftAudio,
   syncDraftCover,
+  runDynamicTrial,
   selectDraftCoverBackground,
   toggleDraftCoverBackgroundStar,
   saveDraftContent,
   updateDraftMeta,
   checkDraftQuality,
   regenerateDraftScene,
+  regenerateDraftDynamicScene,
   getRuntimeStatus,
   getLlmConfigPayload,
   saveLlmConfig,
@@ -134,6 +136,11 @@ export function createAppServer() {
         return sendJson(res, 200, await syncDraftCover(body));
       }
 
+      if (req.method === "POST" && url.pathname === "/api/drafts/dynamic-trial") {
+        const body = await readJsonBody(req);
+        return sendJson(res, 200, await runDynamicTrial(body));
+      }
+
       if (req.method === "POST" && url.pathname === "/api/drafts/select-cover-background") {
         const body = await readJsonBody(req);
         return sendJson(res, 200, await selectDraftCoverBackground(body));
@@ -162,6 +169,11 @@ export function createAppServer() {
       if (req.method === "POST" && url.pathname === "/api/drafts/scene-regenerate") {
         const body = await readJsonBody(req);
         return sendJson(res, 200, await regenerateDraftScene(body));
+      }
+
+      if (req.method === "POST" && url.pathname === "/api/drafts/scene-regenerate-dynamic") {
+        const body = await readJsonBody(req);
+        return sendJson(res, 200, await regenerateDraftDynamicScene(body));
       }
 
       if (req.method === "GET" && url.pathname === "/api/status") {

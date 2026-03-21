@@ -145,6 +145,7 @@ const fullTrialCardEl = document.querySelector("#full-trial-card");
 const partialAudioBtn = document.querySelector("#partial-audio-btn");
 const partialCoverBtn = document.querySelector("#partial-cover-btn");
 const rerollCoverBackgroundBtn = document.querySelector("#reroll-cover-background-btn");
+const dynamicTrialBtn = document.querySelector("#dynamic-trial-btn");
 const partialSceneBtn = document.querySelector("#partial-scene-btn");
 const fullTrialBtn = document.querySelector("#full-trial-btn");
 const partialAudioStatusEl = document.querySelector("#partial-audio-status");
@@ -436,6 +437,7 @@ function attachEvents() {
   manageRecommendBtn?.addEventListener("click", handleRecommendAction);
   partialAudioBtn?.addEventListener("click", handlePartialAudioRebuild);
   partialCoverBtn?.addEventListener("click", handlePartialCoverRebuild);
+  dynamicTrialBtn?.addEventListener("click", handleDynamicTrial);
   rerollCoverBackgroundBtn?.addEventListener("click", handleRerollCoverBackground);
   partialSceneBtn?.addEventListener("click", handlePartialSceneRebuild);
   fullTrialBtn?.addEventListener("click", handleFullTrial);
@@ -714,8 +716,12 @@ async function handleQualityCheck() {
   try {
     setStatus("正在执行导出前质检...", "working");
     const data = await postJson("/api/drafts/check", { draftId: currentDraftId });
+    const nextDraft = {
+      ...(data.draft || currentDraft || {}),
+      sceneAssetReport: data.sceneAssetReport || data?.draft?.sceneAssetReport || null,
+    };
+    renderDraft(nextDraft);
     renderQualityChecks(data.checks || []);
-    currentDraft = data.draft;
     setStatus("质检已完成。", "success");
   } catch (error) {
     setStatus(error.message || "质检失败", "error");
@@ -983,7 +989,7 @@ function renderProductionProgress(draft) {
   if (productionProgressStripEl) {
     const hasAudioAssets = Boolean(draft?.assets?.voicePath) || Boolean((draft?.subtitleEntries || []).length);
     const hasCoverAssets = Boolean(draft?.assets?.coverPath) || Boolean(draft?.coverImage);
-    const hasSceneAssets = Boolean((draft?.storyboard || []).some((scene) => scene?.assetPath));
+    const hasSceneAssets = Boolean((draft?.storyboard || []).some((scene) => hasRenderableSceneAsset(scene)));
 
     productionProgressStripEl.querySelectorAll("[data-production-progress]").forEach((node) => {
       const step = node.dataset.productionProgress;
@@ -1376,7 +1382,7 @@ function getWorkflowRecommendation(draft, state) {
   const exportInfo = draft?.exportInfo || {};
   const hasAudioAssets = Boolean(draft?.assets?.voicePath) || Boolean((draft?.subtitleEntries || []).length);
   const hasCoverAssets = Boolean(draft?.assets?.coverPath) || Boolean(draft?.coverImage);
-  const hasSceneAssets = Boolean((draft?.storyboard || []).length);
+  const hasSceneAssets = Boolean((draft?.storyboard || []).some((scene) => hasRenderableSceneAsset(scene)));
   const hasCoreProductionAssets = hasAudioAssets && hasCoverAssets && hasSceneAssets;
   const coverDirty = currentDirtyState.cover;
   const storyboardDirty = currentDirtyState.storyboard;
@@ -1564,16 +1570,20 @@ function getWorkflowRecommendation(draft, state) {
 }
 
 function updateTrialActionState(recommendation) {
-  const sceneLabel = storyboardDraftState[currentStoryboardIndex]?.sceneTitle || `Scene ${currentStoryboardIndex + 1 || 1}`;
+  const currentScene = storyboardDraftState[currentStoryboardIndex];
+  const sceneLabel = currentScene?.sceneTitle || `Scene ${currentStoryboardIndex + 1 || 1}`;
+  const sceneSummary = buildStoryboardMaterialSummary(storyboardDraftState);
+  const sceneReviewLabel = getSceneReviewLabel(currentScene?.id, currentDraft);
   const actionState = getProductionActionState(currentDraftId);
   const sceneDisabled = currentProductionStage === "script" || !currentDraftId || !storyboardDraftState.length || isPreviewDraft();
   const audioNeedsSync = !currentDraft?.assets?.voicePath || !(currentDraft?.subtitleEntries || []).length;
   const coverNeedsSync = !currentDraft?.assets?.coverPath && !currentDraft?.coverImage;
   const hasAudioAssets = !audioNeedsSync;
   const hasCoverAssets = !coverNeedsSync;
-  const hasSceneAssets = Boolean(storyboardDraftState.length) || Boolean((currentDraft?.storyboard || []).some((scene) => scene?.assetPath));
+  const hasSceneAssets = Boolean(storyboardDraftState.some((scene) => hasRenderableSceneAsset(scene)))
+    || Boolean((currentDraft?.storyboard || []).some((scene) => hasRenderableSceneAsset(scene)));
   const coverHasRun = Boolean(actionState.cover);
-  const sceneHasRun = Boolean(actionState.scene);
+  const sceneHasRun = Boolean(actionState.scene) || hasSceneAssets;
   const hasCoreProductionAssets = hasAudioAssets && hasCoverAssets && hasSceneAssets;
   const audioDisabled = currentProductionStage === "script" || !currentDraftId || isPreviewDraft();
   const coverDisabled = currentProductionStage === "script" || !currentDraftId || isPreviewDraft();
@@ -1653,6 +1663,14 @@ function updateTrialActionState(recommendation) {
       : storyboardDraftState.length
         ? `补当前镜头并继续：${sceneLabel}`
         : "当前无可同步镜头";
+  }
+  if (dynamicTrialBtn) {
+    dynamicTrialBtn.disabled = sceneDisabled;
+    dynamicTrialBtn.textContent = currentProductionStage === "script"
+      ? "脚本确认后可做动态试产"
+      : sceneSummary.dynamic > 0 || sceneSummary.mixed > 0
+        ? "继续动态试产"
+        : "动态试产";
   }
   if (storyboardPartialBtn) {
     storyboardPartialBtn.disabled = sceneDisabled;
@@ -1752,7 +1770,7 @@ function updateTrialActionState(recommendation) {
       : !sceneHasRun
         ? "这一步你还没执行。默认镜头草案不算正式镜头生产，建议在前两步稳定后再手动开始。"
       : storyboardDraftState.length
-        ? `镜头层：建议在口播和封面稳定后，再对 ${sceneLabel} 做局部同步`
+        ? `镜头层：dynamic ${sceneSummary.dynamic} / static ${sceneSummary.static} / mixed ${sceneSummary.mixed}。当前镜头 ${getSceneMaterialLabel(currentScene)}，${sceneReviewLabel}。`
         : "镜头层：当前没有可同步的 scene";
     partialSceneMetaEl.classList.toggle("is-dirty", !sceneDisabled && Boolean(storyboardDraftState.length));
     partialSceneMetaEl.classList.toggle("is-clean", sceneDisabled || !storyboardDraftState.length);
@@ -1760,14 +1778,14 @@ function updateTrialActionState(recommendation) {
   if (partialSceneStatusEl) {
     partialSceneStatusEl.textContent = currentProductionStage === "script"
       ? "当前状态：等待脚本确认"
-      : activeProductionTask === "scene"
+      : activeProductionTask === "scene" || activeProductionTask === "dynamic-scene"
         ? "当前状态：生成中"
         : !sceneHasRun
           ? "当前状态：未开始"
         : hasSceneAssets
-          ? "当前状态：可同步 / 已有镜头"
+          ? `当前状态：dynamic ${sceneSummary.dynamic} / static ${sceneSummary.static}`
           : "当前状态：后置未开始";
-    partialSceneStatusEl.classList.toggle("is-active", activeProductionTask === "scene");
+    partialSceneStatusEl.classList.toggle("is-active", activeProductionTask === "scene" || activeProductionTask === "dynamic-scene");
     partialSceneStatusEl.classList.toggle("is-ready", hasSceneAssets && currentProductionStage !== "script");
   }
   if (fullTrialStatusEl) {
@@ -2079,6 +2097,123 @@ async function handleToggleCoverBackgroundStar(backgroundId, starred) {
   setStatus(starred ? "已收藏这张背景版本，后续重抽也会优先保留。" : "已取消收藏这张背景版本。", "success");
 }
 
+function hasRenderableSceneAsset(scene) {
+  return Boolean(scene?.videoPath || scene?.assetPath);
+}
+
+function getSceneMaterialMode(scene) {
+  const materialType = String(scene?.materialType || "").trim();
+  const hasVideo = Boolean(scene?.videoPath);
+  const hasImage = Boolean(scene?.assetPath);
+  if (materialType === "mixed" || (hasVideo && hasImage)) {
+    return "mixed";
+  }
+  if (materialType === "dynamic_video_asset" || hasVideo) {
+    return "dynamic";
+  }
+  if (materialType === "static_asset" || hasImage) {
+    return "static";
+  }
+  return "missing";
+}
+
+function getSceneMaterialLabel(scene) {
+  return getSceneMaterialMode(scene);
+}
+
+function buildStoryboardMaterialSummary(storyboard) {
+  const summary = { dynamic: 0, static: 0, mixed: 0, missing: 0 };
+  (Array.isArray(storyboard) ? storyboard : []).forEach((scene) => {
+    summary[getSceneMaterialMode(scene)] += 1;
+  });
+  return summary;
+}
+
+function getLatestSceneReview(sceneId, draft = currentDraft) {
+  if (!sceneId || !Array.isArray(draft?.sceneReviews)) {
+    return null;
+  }
+  for (let index = draft.sceneReviews.length - 1; index >= 0; index -= 1) {
+    const review = draft.sceneReviews[index];
+    if (String(review?.sceneId || "") === String(sceneId)) {
+      return review;
+    }
+  }
+  return null;
+}
+
+function getSceneReviewLabel(sceneId, draft = currentDraft) {
+  const review = getLatestSceneReview(sceneId, draft);
+  if (!review) {
+    return "review 待生成";
+  }
+  const score = Number(review?.score || 0);
+  const riskCount = Array.isArray(review?.riskFlags) ? review.riskFlags.length : 0;
+  return riskCount > 0 || score < 70 ? `review ${score} · 需复核` : `review ${score} · 可继续`;
+}
+
+async function handleDynamicTrial() {
+  if (currentProductionStage === "script") {
+    setStatus("脚本阶段还不建议做动态试产。请先完成脚本确认。", "info");
+    return;
+  }
+
+  if (isPreviewDraft()) {
+    setStatus("预览模式下不执行真实动态试产。", "info");
+    return;
+  }
+
+  if (!currentDraftId) {
+    setStatus("请先生成或打开一个草稿。", "error");
+    return;
+  }
+
+  try {
+    activeProductionTask = "dynamic-scene";
+    updateTrialActionState(getWorkflowRecommendation(currentDraft, {
+      hasUnsaved: hasUnsavedChanges,
+      hasChecks: Boolean((currentDraft?.qualityChecks || []).length),
+      hasBlockingCheck: (currentDraft?.qualityChecks || []).some((item) => item.level === "error"),
+      exportReady: Boolean((currentDraft?.qualityChecks || []).length) && !(currentDraft?.qualityChecks || []).some((item) => item.level === "error"),
+      videoReady: Boolean(currentDraft?.exportInfo?.videoReady),
+      stage: currentProductionStage,
+    }));
+    if (dynamicTrialBtn) {
+      dynamicTrialBtn.disabled = true;
+      dynamicTrialBtn.textContent = "试产中...";
+    }
+    setStatus("正在执行动态试产，会优先为可用 scene 生成动态镜头。", "working");
+    const data = await postJson("/api/drafts/dynamic-trial", {
+      draftId: currentDraftId,
+      content: buildDraftUpdateContent(),
+    });
+    markProductionAction(currentDraftId, "scene");
+    const nextStoryboard = Array.isArray(data?.draft?.storyboard) ? data.draft.storyboard : [];
+    const nextPendingIndex = findNextPendingStoryboardIndex(nextStoryboard, currentStoryboardIndex);
+    currentStoryboardIndex = nextPendingIndex >= 0 ? nextPendingIndex : clampStoryboardIndex(currentStoryboardIndex, nextStoryboard.length || 1);
+    renderDraft(data.draft);
+    await loadDraftHistory();
+    const summary = buildStoryboardMaterialSummary(data?.draft?.storyboard);
+    setStatus(`动态试产已完成：dynamic ${summary.dynamic} / static ${summary.static} / mixed ${summary.mixed}。`, "success");
+    document.querySelector("#section-storyboard")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (error) {
+    setStatus(error.message || "动态试产失败", "error");
+  } finally {
+    activeProductionTask = "";
+    if (currentDraft) {
+      renderWorkflowMap(currentDraft);
+      updateTrialActionState(getWorkflowRecommendation(currentDraft, {
+        hasUnsaved: hasUnsavedChanges,
+        hasChecks: Boolean((currentDraft?.qualityChecks || []).length),
+        hasBlockingCheck: (currentDraft?.qualityChecks || []).some((item) => item.level === "error"),
+        exportReady: Boolean((currentDraft?.qualityChecks || []).length) && !(currentDraft?.qualityChecks || []).some((item) => item.level === "error"),
+        videoReady: Boolean(currentDraft?.exportInfo?.videoReady),
+        stage: currentProductionStage,
+      }));
+    }
+  }
+}
+
 async function handlePartialSceneRebuild() {
   if (currentProductionStage === "script") {
     setStatus("脚本阶段还不建议重建镜头素材。请先完成脚本确认。", "info");
@@ -2158,7 +2293,7 @@ async function handlePartialSceneRebuild() {
 
 function countPendingStoryboardScenes(storyboard) {
   return Array.isArray(storyboard)
-    ? storyboard.filter((scene) => !scene?.assetPath).length
+    ? storyboard.filter((scene) => !hasRenderableSceneAsset(scene)).length
     : 0;
 }
 
@@ -2170,7 +2305,7 @@ function findNextPendingStoryboardIndex(storyboard, startIndex = 0) {
   const normalizedStart = clampStoryboardIndex(startIndex, storyboard.length);
   for (let offset = 0; offset < storyboard.length; offset += 1) {
     const index = (normalizedStart + offset) % storyboard.length;
-    if (!storyboard[index]?.assetPath) {
+    if (!hasRenderableSceneAsset(storyboard[index])) {
       return index;
     }
   }
@@ -2575,6 +2710,7 @@ function renderStoryboardView(storyboard, assetVersion) {
   try {
     const view = buildStoryboardViewModel({
       storyboard,
+      sceneReviews: currentDraft?.sceneReviews || [],
       assetVersion,
       currentStoryboardIndex,
       currentProductionStage,
@@ -2631,8 +2767,11 @@ function resolveRenderableStoryboard(draft) {
 function buildStoryboardFallbackHtml(storyboard, assetVersion, index) {
   const safeIndex = clampStoryboardIndex(index, storyboard.length);
   const currentScene = storyboard[safeIndex] || storyboard[0];
-  const preview = currentScene?.assetPath ? toVersionedMediaUrl(currentScene.assetPath, assetVersion) : "";
+  const previewVideo = currentScene?.videoPath ? toVersionedMediaUrl(currentScene.videoPath, assetVersion) : "";
+  const previewImage = currentScene?.assetPath ? toVersionedMediaUrl(currentScene.assetPath, assetVersion) : "";
   const pendingCount = countPendingStoryboardScenes(storyboard);
+  const currentSceneMaterial = getSceneMaterialLabel(currentScene);
+  const currentSceneReview = getSceneReviewLabel(currentScene?.id, currentDraft);
 
   return `
     <div class="storyboard-shell">
@@ -2646,12 +2785,14 @@ function buildStoryboardFallbackHtml(storyboard, assetVersion, index) {
             <button type="button" class="storyboard-scene-item${sceneIndex === safeIndex ? " active" : ""}" data-scene-select="${sceneIndex}">
               <div class="storyboard-scene-top">
                 <span class="storyboard-scene-index">Scene ${sceneIndex + 1}</span>
-                <span class="storyboard-scene-flag ${scene?.assetPath ? "is-anchor" : "is-normal"}">${scene?.assetPath ? "就绪" : "待补"}</span>
+                <span class="storyboard-scene-flag ${hasRenderableSceneAsset(scene) ? "is-anchor" : "is-normal"}">${hasRenderableSceneAsset(scene) ? "就绪" : "待补"}</span>
               </div>
               <strong>${escapeHtml(scene.sceneTitle || `镜头 ${sceneIndex + 1}`)}</strong>
               <div class="storyboard-scene-meta">
                 <span>${escapeHtml(getVisualTypeLabel(scene.visualType))}</span>
                 <span>${Number(scene.durationSec || 0)} 秒</span>
+                <span class="is-${getSceneMaterialMode(scene)}">${getSceneMaterialLabel(scene)}</span>
+                <span>${escapeHtml(getSceneReviewLabel(scene?.id, currentDraft))}</span>
               </div>
             </button>
           `).join("")}
@@ -2675,24 +2816,28 @@ function buildStoryboardFallbackHtml(storyboard, assetVersion, index) {
             </div>
             <div class="storyboard-decision-metric">
               <span>当前状态</span>
-              <strong>${currentScene?.assetPath ? "素材已就绪" : "等待补素材"}</strong>
+              <strong>${hasRenderableSceneAsset(currentScene) ? currentSceneMaterial : "等待补素材"}</strong>
             </div>
           </div>
         </div>
         <div class="storyboard-card-body">
           <div class="storyboard-visual-panel storyboard-panel-block">
-            <div class="storyboard-panel-head">
-              <div>
-                <div class="storyboard-section-label">镜头预览</div>
-                <strong>先确认当前镜头有没有出来</strong>
+              <div class="storyboard-panel-head">
+                <div>
+                  <div class="storyboard-section-label">镜头预览</div>
+                  <strong>先确认当前镜头有没有出来</strong>
+                </div>
+                <span class="storyboard-panel-chip storyboard-panel-chip-material is-${getSceneMaterialMode(currentScene)}">${hasRenderableSceneAsset(currentScene) ? currentSceneMaterial : "等待素材"}</span>
               </div>
-              <span class="storyboard-panel-chip">${currentScene?.assetPath ? "已有素材" : "等待素材"}</span>
+              <div class="storyboard-thumb-shell">
+                ${previewVideo
+                  ? `<video src="${escapeHtml(previewVideo)}" class="storyboard-thumb" controls muted playsinline preload="metadata"></video>`
+                  : previewImage
+                    ? `<img src="${escapeHtml(previewImage)}" alt="${escapeHtml(currentScene.sceneTitle || `Scene ${safeIndex + 1}`)}" class="storyboard-thumb" />`
+                    : `<div class="storyboard-thumb-empty">暂无素材</div>`}
+              </div>
+              <div class="storyboard-visual-caption">${escapeHtml(currentScene?.visualPrompt || "这里会先展示当前镜头素材。")} ${escapeHtml(currentSceneReview)}</div>
             </div>
-            <div class="storyboard-thumb-shell">
-              ${preview ? `<img src="${preview}" alt="${escapeHtml(currentScene.sceneTitle || `Scene ${safeIndex + 1}`)}" class="storyboard-thumb" />` : `<div class="storyboard-thumb-empty">暂无素材</div>`}
-            </div>
-            <div class="storyboard-visual-caption">${escapeHtml(currentScene?.visualPrompt || "这里会先展示当前镜头素材。")}</div>
-          </div>
           <div class="storyboard-fields">
             <div class="storyboard-fields-group storyboard-panel-block">
               <div class="storyboard-panel-head">
@@ -2729,13 +2874,14 @@ function buildStoryboardFallbackHtml(storyboard, assetVersion, index) {
                 <span>口播文案</span>
                 <textarea data-storyboard-index="${safeIndex}" data-scene-field="voiceover" rows="8">${escapeHtml(currentScene?.voiceover || "")}</textarea>
               </label>
-              <div class="storyboard-action-note">
-                <p>${pendingCount > 0 ? "当前工作台已切回真实镜头视图。你现在可以补当前镜头，补完后系统会继续推进。" : "这一轮镜头都已出来，可以开始逐镜微调。"}</p>
-                <div class="storyboard-action-note-buttons">
-                  <button type="button" class="switch-btn storyboard-refresh-btn" data-scene-id="${escapeHtml(currentScene?.id || "")}">${pendingCount > 0 ? "补当前镜头并继续" : "重做当前镜头"}</button>
+                <div class="storyboard-action-note">
+                  <p>${pendingCount > 0 ? "当前工作台已切回真实镜头视图。你现在可以补当前镜头，补完后系统会继续推进。" : "这一轮镜头都已出来，可以开始逐镜微调。"}</p>
+                  <div class="storyboard-action-note-buttons">
+                    <button type="button" class="switch-btn storyboard-refresh-btn" data-scene-id="${escapeHtml(currentScene?.id || "")}">${pendingCount > 0 ? "补当前镜头并继续" : "重做当前镜头"}</button>
+                    <button type="button" class="switch-btn storyboard-refresh-dynamic-btn" data-scene-id="${escapeHtml(currentScene?.id || "")}">动态重建当前镜头</button>
+                  </div>
                 </div>
               </div>
-            </div>
           </div>
         </div>
       </article>
@@ -3828,7 +3974,9 @@ async function handleStoryboardClick(event) {
     return;
   }
 
-  const button = event.target.closest(".storyboard-refresh-btn");
+  const standardRefreshButton = event.target.closest(".storyboard-refresh-btn");
+  const dynamicRefreshButton = event.target.closest(".storyboard-refresh-dynamic-btn");
+  const button = standardRefreshButton || dynamicRefreshButton;
   if (!button || !currentDraftId) {
     return;
   }
@@ -3838,19 +3986,23 @@ async function handleStoryboardClick(event) {
     return;
   }
 
+  const isDynamic = Boolean(dynamicRefreshButton);
+  const endpoint = isDynamic ? "/api/drafts/scene-regenerate-dynamic" : "/api/drafts/scene-regenerate";
+  const originalText = button.textContent;
+
   try {
     button.disabled = true;
-    button.textContent = "重做中...";
-    setStatus("正在重做当前镜头素材...", "working");
-    const data = await postJson("/api/drafts/scene-regenerate", { draftId: currentDraftId, sceneId });
+    button.textContent = isDynamic ? "动态重建中..." : "重做中...";
+    setStatus(isDynamic ? "正在按动态镜头优先策略重建当前镜头..." : "正在重做当前镜头素材...", "working");
+    const data = await postJson(endpoint, { draftId: currentDraftId, sceneId });
     renderDraft(data.draft);
     await loadDraftHistory();
-    setStatus("当前镜头已重做。", "success");
+    setStatus(isDynamic ? "当前镜头已按动态镜头优先策略重建。" : "当前镜头已重做。", "success");
   } catch (error) {
-    setStatus(error.message || "重做镜头失败", "error");
+    setStatus(error.message || (isDynamic ? "动态重建镜头失败" : "重做镜头失败"), "error");
   } finally {
     button.disabled = false;
-    button.textContent = "重做这个镜头";
+    button.textContent = originalText || (isDynamic ? "动态重建当前镜头" : "重做这个镜头");
   }
 }
 

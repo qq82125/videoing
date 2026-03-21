@@ -18,6 +18,7 @@ const {
 const disabledLlmConfig = {
   script: { enabled: false },
   storyboard: { enabled: false },
+  video_scene: { enabled: false },
   image: { enabled: false },
   tts: { enabled: false },
   transcription: { enabled: false },
@@ -96,6 +97,21 @@ try {
   const hydrated = await getDraft(draftId);
   assert.ok(Array.isArray(hydrated.draft?.storyboard) && hydrated.draft.storyboard.length === 6, "getDraft 未返回完整 storyboard");
   assert.ok(hydrated.draft.storyboard.every((scene) => scene.assetPath), "getDraft 返回的 storyboard 仍有镜头缺素材");
+  assert.ok(
+    hydrated.draft.storyboard.every((scene) => (
+      typeof scene.scenePurpose === "string" &&
+      typeof scene.shotType === "string" &&
+      typeof scene.subject === "string" &&
+      typeof scene.environment === "string" &&
+      typeof scene.action === "string" &&
+      typeof scene.visualStyle === "string" &&
+      typeof scene.motionHint === "string" &&
+      typeof scene.transitionHint === "string" &&
+      typeof scene.importance === "string" &&
+      typeof scene.canUseStaticFallback === "boolean"
+    )),
+    "旧链路 hydration 后未补齐统一 scene schema",
+  );
   console.log(`storyboard-hydrated: ok (${hydrated.draft.storyboard.length} scenes)`);
 
   const sceneToRegenerate = hydrated.draft.storyboard[0];

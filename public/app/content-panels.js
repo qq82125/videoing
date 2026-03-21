@@ -49,6 +49,7 @@ export function buildSubtitleViewModel({ entries, formatTime, escapeHtml }) {
 
 export function buildStoryboardViewModel({
   storyboard,
+  sceneReviews,
   assetVersion,
   currentStoryboardIndex,
   currentProductionStage,
@@ -67,14 +68,18 @@ export function buildStoryboardViewModel({
 
   const nextStoryboardIndex = clampStoryboardIndex(currentStoryboardIndex, storyboard.length);
   const currentScene = storyboard[nextStoryboardIndex] || storyboard[0];
-  const preview = currentScene?.assetPath ? toVersionedMediaUrl(currentScene.assetPath, assetVersion) : "";
+  const previewVideo = currentScene?.videoPath ? toVersionedMediaUrl(currentScene.videoPath, assetVersion) : "";
+  const previewImage = currentScene?.assetPath ? toVersionedMediaUrl(currentScene.assetPath, assetVersion) : "";
   const totalDuration = storyboard.reduce((sum, scene) => sum + Number(scene.durationSec || 0), 0);
   const sceneDuration = Number(currentScene.durationSec || 0);
   const sceneShare = totalDuration ? Math.round((sceneDuration / totalDuration) * 100) : 0;
   const voiceoverLength = String(currentScene.voiceover || "").trim().length;
-  const pendingSceneCount = storyboard.filter((scene) => !scene?.assetPath).length;
+  const pendingSceneCount = storyboard.filter((scene) => !hasRenderableSceneAsset(scene)).length;
   const hasPendingScenes = pendingSceneCount > 0;
-  const currentSceneReady = Boolean(currentScene?.assetPath);
+  const currentSceneReady = hasRenderableSceneAsset(currentScene);
+  const currentSceneMaterial = getSceneMaterialMeta(currentScene);
+  const currentSceneReview = getLatestSceneReview(sceneReviews, currentScene?.id);
+  const currentSceneReviewMeta = getSceneReviewMeta(currentSceneReview);
   const sceneReview = getSceneReviewFocus(currentScene, {
     totalDuration,
     sceneShare,
@@ -116,6 +121,8 @@ export function buildStoryboardViewModel({
                   storyboardLength: storyboard.length,
                   share,
                 });
+                const sceneMaterial = getSceneMaterialMeta(scene);
+                const sceneReviewMeta = getSceneReviewMeta(getLatestSceneReview(sceneReviews, scene?.id));
                 return `
                   <button type="button" class="storyboard-scene-item${isActive} ${signal.itemClass}" data-scene-select="${index}">
                     <div class="storyboard-scene-top">
@@ -127,6 +134,8 @@ export function buildStoryboardViewModel({
                       <span>${escapeHtml(getVisualTypeLabel(scene.visualType))}</span>
                       <span>${durationSec} 秒</span>
                       <span>${share}% 占比</span>
+                      <span class="is-${sceneMaterial.key}">${sceneMaterial.label}</span>
+                      <span class="is-${sceneReviewMeta.tone}">${sceneReviewMeta.shortLabel}</span>
                     </div>
                     <div class="storyboard-scene-note">${escapeHtml(signal.note)}</div>
                   </button>
@@ -142,6 +151,10 @@ export function buildStoryboardViewModel({
               <span class="storyboard-section-label">当前镜头判断</span>
               <strong>${escapeHtml(sceneReview.title)}</strong>
               <p>${escapeHtml(sceneReview.text)}</p>
+              <div class="storyboard-decision-tags">
+                <span class="storyboard-panel-chip storyboard-panel-chip-material is-${currentSceneMaterial.key}">${currentSceneMaterial.label}</span>
+                <span class="storyboard-panel-chip storyboard-panel-chip-review is-${currentSceneReviewMeta.tone}">${currentSceneReviewMeta.label}</span>
+              </div>
             </div>
             <div class="storyboard-decision-metrics">
               <div class="storyboard-decision-metric">
@@ -153,8 +166,8 @@ export function buildStoryboardViewModel({
                 <strong>${pendingSceneCount} 个</strong>
               </div>
               <div class="storyboard-decision-metric">
-                <span>当前镜头</span>
-                <strong>${currentSceneReady ? "素材已就绪" : "等待补素材"}</strong>
+                <span>素材状态</span>
+                <strong>${currentSceneReady ? currentSceneMaterial.label : "等待补素材"}</strong>
               </div>
             </div>
           </div>
@@ -187,12 +200,18 @@ export function buildStoryboardViewModel({
                   <div class="storyboard-section-label">镜头预览</div>
                   <strong>先看画面和停留感</strong>
                 </div>
-                <span class="storyboard-panel-chip">${preview ? "已有素材" : "等待素材"}</span>
+                <span class="storyboard-panel-chip storyboard-panel-chip-material is-${currentSceneMaterial.key}">${currentSceneReady ? currentSceneMaterial.label : "等待素材"}</span>
               </div>
               <div class="storyboard-thumb-shell">
-                ${preview ? `<img src="${preview}" alt="${escapeHtml(currentScene.sceneTitle || `Scene ${nextStoryboardIndex + 1}`)}" class="storyboard-thumb" />` : `<div class="storyboard-thumb-empty">暂无素材</div>`}
+                ${buildScenePreviewHtml({
+                  scene: currentScene,
+                  previewVideo,
+                  previewImage,
+                  index: nextStoryboardIndex,
+                  escapeHtml,
+                })}
               </div>
-              <div class="storyboard-visual-caption">先看这一镜是否真的在支撑当前段落。</div>
+              <div class="storyboard-visual-caption">先看这一镜是否真的在支撑当前段落。${currentSceneReviewMeta.caption ? escapeHtml(currentSceneReviewMeta.caption) : ""}</div>
             </div>
             <div class="storyboard-fields">
               <div class="storyboard-fields-group storyboard-panel-block">
@@ -235,6 +254,7 @@ export function buildStoryboardViewModel({
                   <p>${hasPendingScenes ? "先把待补镜头依次补齐；每补完一镜，系统会自动带你跳到下一个待补镜头。" : "这一轮镜头素材已经补齐。现在更适合逐镜精修，而不是继续盲目重跑。"}</p>
                   <div class="storyboard-action-note-buttons">
                     <button type="button" class="switch-btn storyboard-refresh-btn" data-scene-id="${escapeHtml(currentScene.id || "")}">${hasPendingScenes ? (currentSceneReady ? "重做当前镜头并继续" : "补当前镜头并继续") : "重做当前镜头"}</button>
+                    <button type="button" class="switch-btn storyboard-refresh-dynamic-btn" data-scene-id="${escapeHtml(currentScene.id || "")}">动态重建当前镜头</button>
                   </div>
                 </div>
               </div>
@@ -244,6 +264,81 @@ export function buildStoryboardViewModel({
       </div>
     `,
   };
+}
+
+function hasRenderableSceneAsset(scene) {
+  return Boolean(scene?.videoPath || scene?.assetPath);
+}
+
+function getSceneMaterialMeta(scene) {
+  const materialType = String(scene?.materialType || "").trim();
+  const hasVideo = Boolean(scene?.videoPath);
+  const hasImage = Boolean(scene?.assetPath);
+  if (materialType === "mixed" || (hasVideo && hasImage)) {
+    return { key: "mixed", label: "mixed" };
+  }
+  if (materialType === "dynamic_video_asset" || hasVideo) {
+    return { key: "dynamic", label: "dynamic" };
+  }
+  if (materialType === "static_asset" || hasImage) {
+    return { key: "static", label: "static" };
+  }
+  return { key: "missing", label: "missing" };
+}
+
+function getLatestSceneReview(sceneReviews, sceneId) {
+  if (!sceneId || !Array.isArray(sceneReviews)) {
+    return null;
+  }
+  for (let index = sceneReviews.length - 1; index >= 0; index -= 1) {
+    const review = sceneReviews[index];
+    if (String(review?.sceneId || "") === String(sceneId)) {
+      return review;
+    }
+  }
+  return null;
+}
+
+function getSceneReviewMeta(review) {
+  const score = Number(review?.score || 0);
+  const riskCount = Array.isArray(review?.riskFlags) ? review.riskFlags.length : 0;
+  if (!review) {
+    return { tone: "idle", label: "review 待生成", shortLabel: "待 review", caption: "" };
+  }
+  if (riskCount > 0 || score < 70) {
+    return {
+      tone: "warning",
+      label: `review ${score} 分 · 需复核`,
+      shortLabel: `review ${score}`,
+      caption: `最新 review ${score} 分，建议先处理 ${riskCount || 1} 个风险点。`,
+    };
+  }
+  return {
+    tone: "ready",
+    label: `review ${score} 分 · 可继续`,
+    shortLabel: `review ${score}`,
+    caption: `最新 review ${score} 分，当前镜头可继续推进。`,
+  };
+}
+
+function buildScenePreviewHtml({ scene, previewVideo, previewImage, index, escapeHtml }) {
+  const sceneLabel = escapeHtml(scene?.sceneTitle || `Scene ${index + 1}`);
+  if (previewVideo) {
+    return `
+      <video
+        src="${escapeHtml(previewVideo)}"
+        class="storyboard-thumb"
+        controls
+        muted
+        playsinline
+        preload="metadata"
+      ></video>
+    `;
+  }
+  if (previewImage) {
+    return `<img src="${escapeHtml(previewImage)}" alt="${sceneLabel}" class="storyboard-thumb" />`;
+  }
+  return `<div class="storyboard-thumb-empty">暂无素材</div>`;
 }
 
 function buildLockedStoryboardScaffold({ currentProductionStage }) {
